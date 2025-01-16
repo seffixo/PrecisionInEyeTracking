@@ -1,0 +1,30 @@
+stages:
+  - Build
+  - Testing
+  - Style_check
+build:
+  stage: Build
+  image: python:3.10.0
+  tags:
+    - techbase-runner
+  variables: 
+    VAR: "du!"
+  script:
+    - pip install -r requirements.txt
+    - python3 test.py --parameter "${VAR}"
+testing:
+  stage: Testing
+  image: python:3.10.0
+  tags:
+    - techbase-runner
+  script:
+    - pip install -r requirements.txt
+    - python -m pytest --cov -v
+style_check:
+  stage: Style_check
+  image: python:3.10.0
+  tags:
+    - techbase-runner
+  script:
+    - pip install pycodestyle==2.10.0
+    - python -m pycodestyle .
