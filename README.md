@@ -10,3 +10,14 @@
 - [ ] Hinterlege SSH Key im GitLab
 
 
+# Implementation Workflow
+- Implement your functionalities
+- Check your script for PEP8 conformity
+- Write or adapt the Unit Test for your script 
+- Naming convention for Unit Test Scripts test_"name of the script to be tested".py
+
+
+### Generate the requirements.txt
+The pip command for installing: pip install pipreqs 
+
+The pip command for executing: pipreqs "path of folder containing all python scrits" --force
