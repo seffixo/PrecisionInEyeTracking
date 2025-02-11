@@ -21,3 +21,12 @@
 The pip command for installing: pip install pipreqs 
 
 The pip command for executing: pipreqs "path of folder containing all python scrits" --force
+
+
+### Run main.py
+use this command to run the .jsonl-type with the corresponding .txt-file. 
+the txt-file contains timestamp-ranges where the participant was looking at a certain point of interest. 
+
+this main.py is still a WIP and is only preprocessing jsonl-files to filter unwanted information. 
+
+python main.py --json_files InputFiles\gazedata_Simon1.jsonl --timestamps InputFiles\Simon1.txt

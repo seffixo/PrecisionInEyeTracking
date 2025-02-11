@@ -1,2 +1,3 @@
-__pycache__/
-venv
+myenv3.11/
+src/InputFiles
+src/OutputFiles
