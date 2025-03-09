@@ -101,8 +101,9 @@ def filter_json_by_timestamps(json_data, timestamp_ranges):
             if is_timestamp_in_ranges(shortened_timestamp, timestamp_ranges):
                 filtered_entry = {
                     "timestamp": shortened_timestamp,
-                    "gaze2d": entry.get("data", {}).get("gaze2d"),
-                    "gaze3d": entry.get("data", {}).get("gaze3d")
+                    "gaze3d": entry.get("data", {}).get("gaze3d"),
+                    "eyeleft": entry.get("data", {}).get("eyeleft"),
+                    "eyeright": entry.get("data", {}).get("eyeright")
                 }
                 filtered_entries.append(filtered_entry)
 
@@ -134,6 +135,8 @@ def main(json_files, timestamps, output):
     for file_path in json_files:
         if os.path.exists(file_path) and (file_path.endswith('.json') or file_path.endswith('.jsonl')):
             data = read_json_file(file_path)
+            file_name = os.path.splitext(os.path.basename(file_path))[0]
+            print("file name: ", file_name)
             if data is not None:
                 filtered_data = filter_json_by_timestamps(data, timestamp_ranges)
                 #print(f"Filtered contents of {file_path}:\n{json.dumps(filtered_data, indent=4)}\n")
@@ -142,14 +145,14 @@ def main(json_files, timestamps, output):
             print(f"Invalid file path or not a JSON/JSONL file: {file_path}")
 
     if all_filtered_data:
-        output = "OutputFiles/" + output
-        save_filtered_data_to_file(all_filtered_data, output)
+        output_path = "OutputFiles/" + file_name + "_" + output
+        save_filtered_data_to_file(all_filtered_data, output_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Filter JSON/JSONL files by timestamp ranges and save the results in a separate JSON file.")
     parser.add_argument("--json_files", "-jf", nargs='+', required=True, help="Path(s) to the input JSON or JSONL file(s).")
     parser.add_argument("--timestamps", "-ts", required=True, help="Path to the file containing timestamp ranges.")
-    parser.add_argument("--output", "-op", default="filtered_output.json", help="Path to the output JSON file.")
+    parser.add_argument("--output", "-op", default="filtered_eyes.json", help="Path to the output JSON file.")
 
     args = parser.parse_args()
     main(args.json_files, args.timestamps, args.output)
