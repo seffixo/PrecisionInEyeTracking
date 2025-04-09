@@ -3,6 +3,11 @@ import os
 import argparse
 from datetime import datetime
 
+'''
+Extract time ranges from gazedata where particiants were focussing on a specific point.
+Possibility to extract eye gazeorigins and eye gazedirections to calculate vergence point in vergence_point.py.
+'''
+
 def read_json_file(file_path):
     """
     Reads and returns the content of a JSON or JSONL file.
