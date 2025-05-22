@@ -2,24 +2,55 @@ import cv2
 import numpy as np
 import os
 import argparse
+import sys
 
-def find_marker_positions(frame_path, template_path, output_path, threshold=0.8):
-    """
-    Findet alle Vorkommen eines Templates in einem Bild und speichert die Treffer visualisiert im Bild.
+'''
+Script to find fixation points (dots) in extracted video frames and saving their values to csv files. 
+Parameter: 
+    frame_path: path to video frames sorted in different subfolders. 
+    template: extracted image from one fixation point (dot) to act as the sample of what we are trying to find (the dots).
+    output_path: path to where csv files should be saved using a similiar folder-structure as in frame_path.
 
-    :param frame_path: Pfad zum zu durchsuchenden Bild
-    :param template_path: Pfad zum Referenzbild (Marker)
-    :param output_path: Pfad zur gespeicherten Ausgabe mit Markierungen
-    :param threshold: Matching-Schwelle (zwischen 0 und 1)
-    :return: Liste der normierten Koordinaten [(x1, y1), (x2, y2), ...]
-    """
+Methods: 
+    check_n_del_images: preprocessing subfolders and checking if there are any files that are not images and deleting those. 
+    find_marker_positions: using subfolder structure and checking every frame for fixation points and saving those to csv files.
+'''
 
-    # Lade Poster-Frame und Referenz-Template
-    frame = cv2.imread(frame_path)
-    if frame is None:
-        raise FileNotFoundError(f"Bild nicht gefunden: {frame_path}")
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    h_frame, w_frame = gray_frame.shape
+def check_n_del_images(video_title, template):
+    #check if template is a .png file
+    image_endings = ".png", ".jpeg", ".jpg"
+    if not template.endswith(image_endings):
+        print("Template image is not in a valid format! Script will be stopped.")
+        sys.exit(1)
+
+    #check if subfolders (location of fixated point) contain anything else than jpg, jpeg or png
+    for subfolder in os.listdir(video_title):
+        subfolder_path = os.path.join(video_title, subfolder)
+        
+        if os.path.isdir(subfolder_path):
+            # Durchlaufe alle Dateien im Unterordner
+            for image in os.listdir(subfolder_path):
+                image_path = os.path.join(subfolder_path, image)
+                
+                if os.path.isfile(image_path):
+                    _, ending = os.path.splitext(image)
+                    ending = ending.lower()
+                    
+                    if ending not in image_endings:
+                        print(f"Deleting: {image_path} - invalid format.")
+                        os.remove(image_path)
+
+
+def find_marker_positions(title_path, template_path, output_path, threshold=0.8):
+    #working through subfolder structure and extracting frames and their fixation points
+    for subfolder in title_path:
+        for image in subfolder:
+            # Lade Poster-Frame und Referenz-Template
+            frame = cv2.imread(image)
+            if frame is None:
+                raise FileNotFoundError(f"Bild nicht gefunden: {image}")
+            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            h_frame, w_frame = gray_frame.shape
 
     template = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE)
     if template is None:
@@ -41,12 +72,18 @@ def find_marker_positions(frame_path, template_path, output_path, threshold=0.8)
 
     # Normierte Koordinaten berechnen
     norm_coords = [(x / w_frame, y / h_frame) for (x, y) in detected]
-    rounded_coords = [(float(round(x, 3)), float(round(y, 3))) for x, y in norm_coords]
+    rounded_coords = [(float(round(x, 4)), float(round(y, 4))) for x, y in norm_coords]
 
     # Treffer im Bild einzeichnen
+    count = 1
     for (x, y) in detected:
         cv2.line(frame, (x - 5, y), (x + 5, y), (0, 255, 0), 1)  # horizontale Linie
         cv2.line(frame, (x, y - 5), (x, y + 5), (0, 255, 0), 1)  # vertikale Linie
+        normx = float(round((x / w_frame), 4))
+        normy = float(round((y / h_frame), 4))
+        coords = "P" + str(count) + " " + str(normx) + "," + str(normy)
+        cv2.putText(frame, text=coords, org=(x-50, y-15), fontScale=1, fontFace=2, color=(0,255,0), thickness=2)
+        count = count+1
 
     # Bild speichern
     output_dir = os.path.dirname(output_path)
@@ -57,7 +94,7 @@ def find_marker_positions(frame_path, template_path, output_path, threshold=0.8)
     print(f"{len(norm_coords)} Treffer gefunden und gespeichert unter: {output_path}")
     print(rounded_coords)
     # Zielpfad zur Textdatei
-    output = "koordinaten.txt"
+    output = "koordinatenText.txt"
 
     # Schreiben in Datei
     with open(output, "w") as f:
@@ -65,6 +102,16 @@ def find_marker_positions(frame_path, template_path, output_path, threshold=0.8)
             f.write(f"{x},{y}\n")
 
     return rounded_coords
+
+def main(frame_path, template, output_path, threshold):
+    video_titles = [n for n in os.listdir(frame_path)]
+
+    for title in video_titles:
+        #check if chosen video title has invalid images
+        check_n_del_images(title, template)
+
+        #find marker positions and save them according to the folder name
+        find_marker_positions(title, template, output_path, threshold)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Find dots in extracted frame from video.")
