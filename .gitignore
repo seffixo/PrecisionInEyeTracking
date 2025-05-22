@@ -1,3 +1,8 @@
 myenv3.11/
 src/InputFiles
 src/OutputFiles
+OpenCV/frames
+OpenCV/time_ranges
+OpenCV/videos
+OpenCV/output
+OpenCV/placeholder
