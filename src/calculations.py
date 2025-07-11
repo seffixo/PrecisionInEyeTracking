@@ -1,6 +1,7 @@
 import json
 import numpy as np
 import argparse
+import os
 
 def load_json(json_file):
     with open(json_file, "r") as f:
@@ -33,7 +34,7 @@ def compute_stats(filtered_entries):
         # Compute standard deviation (Standardabweichung)
     std_x, std_y = round(np.std(x_values), 3), round(np.std(y_values), 3)
 
-    #return min_x, min_y, min_z, max_x, max_y, max_z, mean_x, mean_y, mean_z
+    #return min_x, min_y, min_z, max_x, max_y, max_z, mean_x, mean_y, mean_z, std_x, std_y
     return min_x, min_y, max_x, max_y, mean_x, mean_y, std_x, std_y
 
 def filter_gaze_data(gaze_data, time_ranges):
@@ -41,12 +42,13 @@ def filter_gaze_data(gaze_data, time_ranges):
     for start, end in time_ranges:
         range_data = [entry for entry in gaze_data if start <= entry["timestamp"] <= end]
         if range_data:
-#            min_x, min_y, min_z, max_x, max_y, max_z, mean_x, mean_y, mean_z = compute_stats(range_data)
+#            min_x, min_y, min_z, max_x, max_y, max_z, mean_x, mean_y, mean_z, std_x, std_y = compute_stats(range_data)
 #            filtered_results.append({
 #                "time_range": (start, end),
 #                "min_x": min_x, "min_y": min_y, "min_z": min_z,
 #                "max_x": max_x, "max_y": max_y, "max_z": max_z,
-#                "mean_x": mean_x, "mean_y": mean_y, "mean_z": mean_z
+#                "mean_x": mean_x, "mean_y": mean_y, "mean_z": mean_z,
+#                "std_x": std_x, "std_y": std_y
 #            })
             min_x, min_y, max_x, max_y, mean_x, mean_y, std_x, std_y = compute_stats(range_data)
             filtered_results.append({
@@ -58,8 +60,8 @@ def filter_gaze_data(gaze_data, time_ranges):
                         })
     return filtered_results
 
-def save_output(filtered_data, output_file):
-    output_path = "OutputFiles/" + output_file + ".json"
+def save_output(filtered_data, file_name):
+    output_path = "Output/dynamisch/" + file_name
     with open(output_path, "w") as f:
         json.dump(filtered_data, f, indent=4)
 
@@ -67,14 +69,15 @@ def main(json_file, txt_file, output_file):
     gaze_data = load_json(json_file)
     time_ranges = load_time_ranges(txt_file)
     filtered_data = filter_gaze_data(gaze_data, time_ranges)
-    save_output(filtered_data, output_file)
-    print(f"Filtered data saved to {output_file}")
+    file_name = os.path.splitext(os.path.basename(json_file))[0] + output_file
+    save_output(filtered_data, file_name)
+    print(f"Filtered data saved to {file_name}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze filtered gaze data for min, max, and mean gaze3d values.")
     parser.add_argument("--filtered_json", "-fj", required=True, help="Path to the filtered JSON file.")
     parser.add_argument("--timestamps", "-ts", required=True, help="Path to the timestamp ranges file.")
-    parser.add_argument("--output", "-op", default="gaze_analysis.json", help="Path to the output analysis file.")
+    parser.add_argument("--output", "-op", default="_analysis.json", help="Path to the output analysis file.")
     
     args = parser.parse_args()
     main(args.filtered_json, args.timestamps, args.output)
