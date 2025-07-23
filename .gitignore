@@ -1,6 +1,7 @@
 PrecisionEnv/
 myenv3.11/
 *.json
+*.jsonl
 *.txt
 src/InputFiles
 src/OutputFiles
