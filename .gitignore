@@ -1,5 +1,7 @@
 PrecisionEnv/
 myenv3.11/
+*.json
+*.txt
 src/InputFiles
 src/OutputFiles
 OpenCV/frames

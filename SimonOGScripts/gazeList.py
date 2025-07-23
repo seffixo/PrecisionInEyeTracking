@@ -53,7 +53,7 @@ def main():
         description="Extract valid 2D/3D gaze points from a JSON log"
     )
     p.add_argument(
-        "input_json",
+        "--input_json",
         help="Path to line-delimited input.json (one JSON object per line)",
     )
     p.add_argument(
