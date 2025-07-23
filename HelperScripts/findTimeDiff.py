@@ -1,85 +1,42 @@
 import os
-import json
-import re
+
 from collections import defaultdict
 
-def shorten_folder_name(folder_name):
-    index = folder_name.find("P0")
-    return folder_name[index:] if index != -1 else folder_name
+# Dictionary to store smallest differences
+smallest_diffs = defaultdict(lambda: float('inf'))
 
-def extract_p0_code(folder_name):
-    match = re.search(r"(P0\d+)", folder_name)
-    return match.group(1) if match else folder_name
+# Root directory to start searching
+root_dir = './Recordings_static'  # Change this to your root directory if needed
 
-def find_meta_folders(base_path):
-    results = []
-    for root, dirs, files in os.walk(base_path):
-        if os.path.basename(root) == "meta":
-            parent_folder = os.path.basename(os.path.dirname(root))
-            shortened_name = shorten_folder_name(parent_folder)
-            timestamps = []
+# Traverse directories
+for dirpath, dirnames, filenames in os.walk(root_dir):
+    if "Event_time_ranges.txt" in filenames:
+        file_path = os.path.join(dirpath, "Event_time_ranges.txt")
+        folder_name = os.path.basename(dirpath)
+        
+        # Extract participant key (e.g., "P033")
+        participant_key = folder_name.split("_")[0]
 
-            for file_name in files:
-                if file_name.endswith(".json"):
-                    file_path = os.path.join(root, file_name)
-                    try:
-                        with open(file_path, 'r', encoding='utf-8') as file:
-                            data = json.load(file)
-                            if isinstance(data, dict):
-                                data = [data]
-                            for item in data:
-                                if isinstance(item, dict) and item.get("label") == "MouseClick":
-                                    timestamp = item.get("timestamp")
-                                    if timestamp is not None:
-                                        timestamps.append(timestamp)
-                    except Exception as e:
-                        print(f"Error reading {file_path}: {e}")
+        with open(file_path, 'r') as f:
+            lines = f.readlines()
+        
+        # Parse start times
+        try:
+            start_times = [float(line.split(',')[0]) for line in lines if line.strip()]
+        except ValueError:
+            continue  # Skip files with malformed lines
 
-            if timestamps:
-                if len(timestamps) != 9:
-                    print(f"Not 9 timestamps at {parent_folder}")
-                    continue
+        # Calculate differences
+        if len(start_times) > 1:
+            start_times.sort()
+            diffs = [j - i for i, j in zip(start_times[:-1], start_times[1:])]
+            min_diff = min(diffs)
+            
+            # Store the smallest difference found so far for the participant
+            if min_diff < smallest_diffs[participant_key]:
+                smallest_diffs[participant_key] = min_diff
 
-                timestamps.sort()
-                differences = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
-                if differences:
-                    smallest_diff = round(min(differences),3)
-                    results.append({shortened_name: smallest_diff})
-
-    return results
-
-def save_raw_results_to_txt(results, file_path):
-    with open(file_path, 'w', encoding='utf-8') as f:
-        for entry in results:
-            for folder_name, smallest_diff in entry.items():
-                f.write(f"{folder_name}: {smallest_diff}\n")
-
-def summarize_results(results):
-    summarized = defaultdict(list)
-    for entry in results:
-        for folder_name, value in entry.items():
-            p0_code = extract_p0_code(folder_name)
-            summarized[p0_code].append(value)
-    return {p0_code: min(values) for p0_code, values in summarized.items()}
-
-def save_summary_to_txt(summary, file_path):
-    with open(file_path, 'w', encoding='utf-8') as f:
-        for p0_code, smallest_diff in summary.items():
-            f.write(f"{p0_code}: {smallest_diff}\n")
-
-# Example usage
-if __name__ == "__main__":
-    base_directory = "./Recordings_static"  # starting path
-
-    raw_output_txt = "raw_results_static.txt"
-    summarized_output_txt = "summarized_results_static.txt"
-
-    raw_results = find_meta_folders(base_directory)
-
-    # Save raw results
-    #save_raw_results_to_txt(raw_results, raw_output_txt)
-
-    # Summarize and save summary
-    summarized_output = summarize_results(raw_results)
-    save_summary_to_txt(summarized_output, summarized_output_txt)
-
+# Write results to file
+with open('smallest_time_diffs.txt', 'w') as out_file:
+    for participant, diff in sorted(smallest_diffs.items()):
+        out_file.write(f"{participant}: {diff:.3f}\n")

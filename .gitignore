@@ -1,3 +1,4 @@
+PrecisionEnv/
 myenv3.11/
 src/InputFiles
 src/OutputFiles
@@ -6,3 +7,12 @@ OpenCV/time_ranges
 OpenCV/videos
 OpenCV/output
 OpenCV/placeholder
+HelperScripts/Recordings_static
+HelperScripts/Recordings_static_einzeln
+glassesVali/
+Convert2D_to3D/Recordings_static
+Convert2D_to3D/521_stat_conv
+Convert2D_to3D/581_stat_conv
+
+
+

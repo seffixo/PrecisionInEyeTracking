@@ -1,6 +1,51 @@
 import os
 import json
 import argparse
+import gzip
+import shutil
+
+
+def rename_participant_folders(root_dir):
+    """
+    Renames any folder containing 'P0' by removing everything before 'P0'.
+    """
+    for dirpath, dirnames, _ in os.walk(root_dir, topdown=False):
+        for dirname in dirnames:
+            if "P0" in dirname:
+                old_path = os.path.join(dirpath, dirname)
+                new_name = dirname[dirname.index("P0"):]  # Trim before "P0"
+                new_path = os.path.join(dirpath, new_name)
+                if old_path != new_path:
+                    if not os.path.exists(new_path):
+                        os.rename(old_path, new_path)
+                        print(f"Renamed folder: {old_path} → {new_path}")
+                    else:
+                        print(f"Skipped renaming '{old_path}': '{new_path}' already exists.")
+
+
+def unpack_and_rename_gazedata_gz_files(root_dir):
+    """
+    Recursively looks for 'gazedata.gz' files and unpacks them into 'gazedata_<foldername>'.
+    """
+    for dirpath, _, filenames in os.walk(root_dir):
+        for filename in filenames:
+            if filename == "gazedata.gz":
+                folder_name = os.path.basename(dirpath)
+                new_filename = f"gazedata_{folder_name}"
+                unpacked_path = os.path.join(dirpath, new_filename)
+                gz_path = os.path.join(dirpath, filename)
+
+                if os.path.exists(unpacked_path):
+                    print(f"Skipped unpacking: '{unpacked_path}' already exists.")
+                    continue
+
+                try:
+                    with gzip.open(gz_path, 'rb') as f_in, open(unpacked_path, 'wb') as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                    print(f"Unpacked: {gz_path} → {unpacked_path}")
+                except Exception as e:
+                    print(f"Failed to unpack '{gz_path}': {e}")
+
 
 def extract_and_generate_mouseclick_ranges(meta_path, output_path):
     """
@@ -39,17 +84,20 @@ def extract_and_generate_mouseclick_ranges(meta_path, output_path):
 
     print(f"{len(output_lines)} MouseClick ranges written to '{output_path}'")
 
+
 def process_all_participants(root_dir):
     """
-    Search recursively for 'meta' folders under root_dir and process each one.
+    Renames folders, unpacks gazedata.gz files, and processes all meta folders.
     """
     if not os.path.exists(root_dir):
         print(f"Root folder '{root_dir}' does not exist.")
         return
 
-    meta_found = False
+    rename_participant_folders(root_dir)
+    unpack_and_rename_gazedata_gz_files(root_dir)
 
-    for root, dirs, files in os.walk(root_dir):
+    meta_found = False
+    for root, dirs, _ in os.walk(root_dir):
         for dir_name in dirs:
             if dir_name == "meta":
                 meta_found = True
@@ -61,12 +109,13 @@ def process_all_participants(root_dir):
     if not meta_found:
         print("No 'meta' folders found in the specified root directory.")
 
-def main():
-    parser = argparse.ArgumentParser(description="Extract and process MouseClick timestamps.")
-    parser.add_argument("--root_dir", "-rd", type=str, required=True, help="Path to the root directory containing participant folders.")
 
+def main():
+    parser = argparse.ArgumentParser(description="Rename folders, unpack gazedata.gz, and extract MouseClick ranges.")
+    parser.add_argument("--root_dir", "-rd", type=str, required=True, help="Path to the root directory containing participant folders.")
     args = parser.parse_args()
     process_all_participants(args.root_dir)
+
 
 if __name__ == "__main__":
     main()
