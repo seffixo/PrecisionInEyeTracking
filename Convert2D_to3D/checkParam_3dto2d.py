@@ -69,9 +69,9 @@ def load_object_points_from_py(py_path):
     return namespace["object_points_data"]
 
 
-def process_conversion_folder(conversion_path):
-    param_path = os.path.abspath("../Recordings_static/P027_statisch/P027_120cm_stat_3lights/conversion")
-    json_path = os.path.join(param_path, "camera_parameters.json")
+def process_conversion_folder(conversion_path, cam_path):
+    json_path = os.path.join(cam_path, "conversion/camera_parameters.json")
+    #print(f"json path is {json_path}")
     gaze_py_path = os.path.join(conversion_path, "2D3DGazeLists.py")
     output_path = os.path.join(conversion_path, "normalized_coords.py")
 
@@ -97,10 +97,10 @@ def process_conversion_folder(conversion_path):
         with open(output_path, "w") as out_file:
             out_file.write("normalized_coords = [\n")
             for point in normalized_coords:
-                out_file.write(f"    ({point[0]:.6f}, {point[1]:.6f}),\n")
+                out_file.write(f"    ({point[0]:.4f}0000, {point[1]:.4f}0000),\n")
             out_file.write("]\n")
 
-        print(f"Saved: {output_path}")
+        #print(f"Saved: {output_path}")
 
     except Exception as e:
         print(f"Error processing {conversion_path}: {e}")
@@ -109,23 +109,25 @@ def process_conversion_folder(conversion_path):
 def find_conversion_folders(root_dir):
     for root, dirs, _ in os.walk(root_dir):
         for d in dirs:
-            if d.startswith("P0"):
-                subject_path = os.path.join(root, d)
-                for subroot, subdirs, _ in os.walk(subject_path):
-                    for sd in subdirs:
-                        if sd == "conversion":
-                            yield os.path.join(subroot, sd)
+             if d == "conversion":
+                yield os.path.join(root, d)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Process calibration and gaze data.")
     parser.add_argument("--root_dir", help="Root directory containing recordings.")
+    parser.add_argument("--camParaFolder", help="folder for used camera parameters")
     args = parser.parse_args()
+
+    root_dir = os.path.abspath(args.root_dir)
+
+    # Join everything together
+    cam_path = os.path.join(root_dir, args.camParaFolder)
 
     print(f"\nSearching in: {args.root_dir}\n")
     for conversion_folder in find_conversion_folders(args.root_dir):
         #print(f"→ Processing: {conversion_folder}")
-        process_conversion_folder(conversion_folder)
+        process_conversion_folder(conversion_folder, cam_path)
 
 
 if __name__ == "__main__":
