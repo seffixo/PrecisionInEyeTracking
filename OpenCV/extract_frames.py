@@ -45,9 +45,10 @@ def extract_frames(video_path, txt_path, output_path):
 
 
 def process_all_recordings(base_folder):
+    to_do = {"P018", "P019", "P020", "P021", "P022"}
     for item in os.listdir(base_folder):
         item_path = os.path.join(base_folder, item)
-        if os.path.isdir(item_path) and item.startswith("P0"):
+        if os.path.isdir(item_path) and any(item.startswith(p) for p in to_do):
             # Now recursively search for subfolders containing both required files
             for root, dirs, files in os.walk(item_path):
                 if "scenevideo.mp4" in files and "Event_time_ranges.txt" in files:
