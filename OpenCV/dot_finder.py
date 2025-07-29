@@ -5,11 +5,11 @@ import argparse
 import sys
 
 '''
-Script to find fixation points (dots) in extracted video frames and saving their values to csv files. 
+Script to find fixation points (dots) in extracted video frames and saving their values to jsonl files. 
 Parameter: 
     frame_path: path to video frames sorted in different subfolders. 
     template: extracted image from one fixation point (dot) to act as the sample of what we are trying to find (the dots).
-    output_path: path to where csv files should be saved using a similiar folder-structure as in frame_path.
+    output_path: path to where jsonl files should be saved using a similiar folder-structure as in frame_path.
 
 Methods: 
     check_n_del_images: preprocessing subfolders and checking if there are any files that are not images and deleting those. 
@@ -41,9 +41,9 @@ def check_n_del_images(video_title, template):
                         os.remove(image_path)
 
 
-def find_marker_positions(title_path, template_path, output_path, threshold=0.8):
+def find_marker_positions(frame_path, template_path, output_path, threshold=0.8):
     #working through subfolder structure and extracting frames and their fixation points
-    for subfolder in title_path:
+    for subfolder in frame_path:
         for image in subfolder:
             # Lade Poster-Frame und Referenz-Template
             frame = cv2.imread(image)
@@ -94,7 +94,8 @@ def find_marker_positions(title_path, template_path, output_path, threshold=0.8)
     print(f"{len(norm_coords)} Treffer gefunden und gespeichert unter: {output_path}")
     print(rounded_coords)
     # Zielpfad zur Textdatei
-    output = "koordinatenText.txt"
+    output = "..\\..\\WorkingFolder_Python\\OpCV"
+    output_text_path = os.path.join(output, "koordinaten" + frame + ".txt")
 
     # Schreiben in Datei
     with open(output, "w") as f:
@@ -116,14 +117,14 @@ def main(frame_path, template, output_path, threshold):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Find dots in extracted frame from video.")
     parser.add_argument("--frame_path", "-fp", required=True, type=str, help="Path(s) to frame file(s).")
-    parser.add_argument("--template", "-t", default="template1.png", help="Template image for search of template in frame PNG.")
+    parser.add_argument("--template", "-t", default="..\\..\\WorkingFolder_Python\\OpCV\\template.png", help="Template image for search of template in frame PNG.")
     parser.add_argument("--output_path", "-op", required=True, help="Path to the output PNG file.")
 
     args = parser.parse_args()
     threshold=0.8
-    find_marker_positions(args.frame_path, args.template, args.output_path, threshold)
+    main(args.frame_path, args.template, args.output_path, threshold)
 
 
 
-#frame_path = r"Lin1_MM_1675Fr.png"
-#output_path = "Lin1MM1675Fr_dots.png"
+#frame_path = r"..\\..\\WorkingFolder_Python\\OpCV\\P002_80cm_stat_basicL_image_processing"
+#output_path = "..\\..\\WorkingFolder_Python\\OpCV\\labeled_images_P002_80cm_stat_basicL"
