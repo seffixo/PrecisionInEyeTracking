@@ -45,7 +45,7 @@ def extract_frames(video_path, txt_path, output_path):
 
 
 def process_all_recordings(base_folder):
-    to_do = {"P018", "P019", "P020", "P021", "P022"}
+    to_do = {"P004", "P005", "P006", "P007", "P008", "P009", "P010", "P011", "P012", "P013", "P014", "P015", "P016", "P017", "P021", "P033"}
     for item in os.listdir(base_folder):
         item_path = os.path.join(base_folder, item)
         if os.path.isdir(item_path) and any(item.startswith(p) for p in to_do):
@@ -57,9 +57,9 @@ def process_all_recordings(base_folder):
                     output_path = os.path.join(root, "image_processing")
 
                     os.makedirs(output_path, exist_ok=True)
-                    #print(f"Processing: {root}")
+                    print(f"Processing: {root}")
                     extract_frames(video_path, txt_path, output_path)
-                    #print(f"Done with: {root}")
+                    print(f"Done with: {root}")
 
 if __name__ == "__main__":
     import argparse
