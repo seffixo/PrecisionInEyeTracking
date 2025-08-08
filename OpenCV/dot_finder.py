@@ -5,6 +5,7 @@ import argparse
 import sys
 import json
 from pathlib import Path
+import logging
 
 '''
 Script to find fixation points (dots) in extracted video frames and saving their values to jsonl files. 
@@ -28,13 +29,57 @@ Methods:
     check_n_del_images: preprocessing subfolders and checking if there are any files that are not images and deleting those. 
     find_marker_positions: using subfolder structure and checking every frame for fixation points and saving those to csv files.
 
-Done: 521: P002, P018, P019,     
+Done: 521: P002, P018, P019, P020, P021, P022, P023, P024, P025, P027
+Skipped: 521: P026
 
 '''
 
-to_do_list = ["P020"]
+# Setup basic logging
+log_path = r"D:\WorkingFolder_PythonD\2Dto3D_Conversion\521_stat_conv\my_log.log"
+
+logging.basicConfig(
+    level=logging.INFO,  # Change to DEBUG, WARNING, etc. as needed
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_path), 
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+to_do_list = ["P028","P029","P030","P031","P032","P034","P035","P036"]
 
 image_endings = (".png", ".jpg", ".jpeg")
+
+def save_image_and_json(selected_detected, frame, output_path, image_filename, subfolder_name):
+    for key, ((x,y), (normx, normy)) in selected_detected.items():
+        cv2.line(frame, (x - 5, y), (x + 5, y), (0, 255, 0), 1)
+        cv2.line(frame, (x, y - 5), (x, y + 5), (0, 255, 0), 1)
+        coords = f"{key} {round(normx,4)},{round(normy,4)}"
+        cv2.putText(frame, text=coords, org=(x-50, y-15), fontScale=1, fontFace=2, color=(0,255,0), thickness=2)
+
+    # Save image
+    output_images = os.path.join(output_path, "images")
+    os.makedirs(output_images, exist_ok=True)
+    output_image_path = os.path.join(output_images, image_filename)
+    cv2.imwrite(output_image_path, frame)
+
+    # Save coords
+    subfolder_output = os.path.join(output_path, subfolder_name + "_coords")
+    os.makedirs(subfolder_output, exist_ok=True)
+    img_name = os.path.splitext(image_filename)[0]
+    output_text_path = os.path.join(subfolder_output, f"coords_{img_name}.json")
+
+    formatted_detections = {}
+
+    for key, ((x,y), (normx, normy)) in selected_detected.items():
+        x_str = f"{normx:.4f}0000"
+        y_str = f"{normy:.4f}0000"
+        formatted_detections[key] = [x_str, y_str]
+
+    with open(output_text_path, "w") as f:
+        json.dump(formatted_detections, f, indent=2)
 
 def find_template_file(folder_path):
     for ext in image_endings:
@@ -43,125 +88,178 @@ def find_template_file(folder_path):
             return candidate
     return None
 
-def filter_detections(detected, w_frame, h_frame, img_processing_path):
-    raw_detections = []
-    for x, y in detected:
-                normx = float(x / w_frame)
-                normy = float(y / h_frame)
-                raw_detections.append({"pixel": (x, y), 
-                                       "norm": (normx, normy)})
+def relabel_grid_points(detections):
+    """
+    Sorts and relabels 9 detections in a 3x3 grid:
+    
+    P1 P2 P3
+    P4 P5 P6
+    P7 P8 P9
 
+    Sorting is done top-to-bottom (by y), then left-to-right (by x) within rows.
+    """
+    # Extract list of (original_key, ((x_px, y_px), (x_norm, y_norm)))
+    points = list(detections.values())  # We only need ((x_px, y_px), (x_norm, y_norm))
+
+    # Sort all points by normalized y (ascending = top to bottom)
+    points.sort(key=lambda item: item[1][1])  # sort by y_norm
+
+    # Cluster into 3 rows
+    row1 = sorted(points[:3], key=lambda item: item[1][0])  # sort by x_norm (left to right)
+    row2 = sorted(points[3:6], key=lambda item: item[1][0])
+    row3 = sorted(points[6:9], key=lambda item: item[1][0])
+
+    # Combine into final ordered list
+    ordered_points = row1 + row2 + row3
+
+    # Create new relabeled dict
+    relabeled = {
+        f"P{index+1}": value
+        for index, value in enumerate(ordered_points)
+    }
+
+    return relabeled
+
+def delete_detections(key_list, detections):
+    key_list.sort(key=lambda x: int(x[1:]), reverse=True)
+    filtered_detections = [
+        value for key, value in detections.items()
+        if key not in key_list
+    ]
+
+    # Step 2: Reindex remaining entries as P1, P2, ...
+    reindexed_detections = {
+        f"P{idx+1}": value
+        for idx, value in enumerate(filtered_detections)
+    }
+
+    # Optional: replace original
+    detections = reindexed_detections
+
+    return detections
+
+def filter_detections(detections, w_frame, h_frame, img_processing_path):
     current_path = Path(img_processing_path)
     distance = current_path.parent.name
+    filtered_detections = {}
     #print("raw detections: ", len(raw_detections))
     #print("parent folder name: ", distance)
 
-    filtered = []
-    for detection in raw_detections:
-        normx, normy = detection["norm"]  # unpack normalized coordinates
+    del_list_80 = []
+    del_list_120 = []
+    del_list_180 = []
+    for key, ((x,y), (normx, normy)) in detections.items():
         if "_80" in distance:
-            if normx > 0.85 or normx < 0.15 or normy > 0.85:
-                print(f"skipping invalid input _80: {normx}, {normy}")
-                continue  # skip invalid
+            if (normx > 0.85 
+                or normx < 0.15 
+                or normy > 0.9):
+                #print(f"skipping invalid input _80: {normx}, {normy}")
+                del_list_80.append(key)
+
         elif "_120" in distance:
-            if normx < 0.28 or normx > 0.70 or normy < 0.10 or normy > 0.70:
-                print(f"skipping invalid input _120: {normx}, {normy}")
-                continue
+            if (normx < 0.26 
+                or normx > 0.72 
+                or normy < 0.08 
+                or normy > 0.78):
+                #print(f"skipping invalid input _120: {normx}, {normy}")
+                del_list_120.append(key)
+
         elif "_180" in distance:
-            if normx < 0.35 or normx > 0.65 or normy < 0.15 or normy > 0.75:
-                print(f"skipping invalid input _180: {normx}, {normy}")
+            if (normx < 0.35 
+                or normx > 0.65 
+                or normy < 0.15 
+                or normy > 0.75):
+                #print(f"skipping invalid input _180: {normx}, {normy}")
+                del_list_180.append(key)
+
+    if del_list_80 and "_80" in distance:
+        filtered_detections = delete_detections(del_list_80, detections)
+
+    elif del_list_120 and "_120" in distance: 
+        filtered_detections = delete_detections(del_list_120, detections)
+
+    elif del_list_180 and "_180" in distance: 
+        filtered_detections = delete_detections(del_list_180, detections)
+        
+    else:
+        filtered_detections = detections
+
+    cleaned_detections = remove_close_points(filtered_detections, min_distance=10)
+    
+    return cleaned_detections
+
+
+def remove_close_points(detections, min_distance=10):
+    removed_keys = set()
+
+    det_items = list(detections.items())
+
+    for i, (key1, ((x1, y1), _)) in enumerate(det_items):
+        if key1 in removed_keys:
+            continue
+        for j in range(i + 1, len(det_items)):
+            key2, ((x2, y2), _) = det_items[j]
+            if key2 in removed_keys:
                 continue
-        filtered.append(detection)
+            dist = np.linalg.norm(np.array([x1, y1]) - np.array([x2, y2]))
+            if dist < min_distance:
+                removed_keys.add(key2)  # remove the second one
+                logger.info(f"Removed duplicate point {key2} (too close to {key1}, dist={dist:.2f})")
+    # Rebuild detections without removed keys
+    cleaned = {k: v for k, v in detections.items() if k not in removed_keys}
+
+    return cleaned
+
+
+def find_marker_positions(image_path, template_path, img_processing_path, threshold, image_filename):
+    #print(f"Processing image: {image_path}")
+
+    # Load image
+    frame = cv2.imread(image_path)
+    if frame is None:
+        logger.error((f"Bild nicht gefunden: {image_path}"))
+        raise FileNotFoundError(f"Bild nicht gefunden: {image_path}")
+
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    h_frame, w_frame = gray_frame.shape
+
+    # Load and validate template
+    template = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE)
+    if template is None:
+        logger.error(f"Template nicht gefunden: {template_path}")
+        raise FileNotFoundError(f"Template nicht gefunden: {template_path}")
+    h_temp, w_temp = template.shape
+
+    # Template Matching
+    result = cv2.matchTemplate(gray_frame, template, cv2.TM_CCOEFF_NORMED)
+    locations = np.where(result >= threshold)
+
+    detected = []
+    matches = sorted(zip(*locations[::-1]), key=lambda pt: result[pt[1], pt[0]], reverse=True)
+    for pt in matches:
+        center = (pt[0] + w_temp // 2, pt[1] + h_temp // 2)
+        if all(np.linalg.norm(np.array(center) - np.array(d)) >= 10 for d in detected):
+            detected.append(center)
+        if len(detected) == 9:
+            break
+
+    norm_coords = [(x / w_frame, y / h_frame) for (x, y) in detected]
+    current_path = Path(image_path).parent.name
 
     detections = {}
-    for count, detection in enumerate(filtered, 1):
-        detections[f"P{count}"] = detection
-    
-    return detections
+    # save detections into dictionary
+    for count, (x, y) in enumerate(detected, 1):
+        normx = float((x / w_frame))
+        normy = float((y / h_frame))
+        detections[f"P{count}"] = ((x, y), (normx, normy))
 
+    if len(detected) == 0:
+        logger.info(f"No detections found in image {image_filename}, {current_path} with threshold {threshold}")
 
+    selected_detected = filter_detections(detections, w_frame, h_frame, img_processing_path)
 
-def find_marker_positions(img_processing_path, template_path, output_path, threshold):
-    for subfolder_name in os.listdir(img_processing_path):
-        subfolder_path = os.path.join(img_processing_path, subfolder_name)
+    return selected_detected, frame, image_filename
 
-        if not os.path.isdir(subfolder_path):
-            continue  # skip files
-
-        print(f"subfolder: {subfolder_path}")
-        for image_filename in os.listdir(subfolder_path):
-            if not image_filename.lower().endswith(image_endings):
-                continue  # skip non-image files
-
-            image_path = os.path.join(subfolder_path, image_filename)
-            #print(f"Processing image: {image_path}")
-
-            # Load image
-            frame = cv2.imread(image_path)
-            if frame is None:
-                raise FileNotFoundError(f"Bild nicht gefunden: {image_path}")
-
-            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            h_frame, w_frame = gray_frame.shape
-
-            # Load and validate template
-            template = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE)
-            if template is None:
-                raise FileNotFoundError(f"Template nicht gefunden: {template_path}")
-            h_temp, w_temp = template.shape
-
-            # Template Matching
-            result = cv2.matchTemplate(gray_frame, template, cv2.TM_CCOEFF_NORMED)
-            locations = np.where(result >= threshold)
-
-            detected = []
-            for pt in zip(*locations[::-1]):
-                center = (pt[0] + w_temp // 2, pt[1] + h_temp // 2)
-                if not any(np.linalg.norm(np.array(center) - np.array(d)) < 10 for d in detected):
-                    detected.append(center)
-
-            norm_coords = [(x / w_frame, y / h_frame) for (x, y) in detected]
-
-            selected_detected = filter_detections(detected, w_frame, h_frame, img_processing_path)
-
-            # Draw detections
-            for count, (key, detection) in enumerate(selected_detected.items(), 1):
-                x, y = detection["pixel"]
-                normx, normy = detection["norm"]
-                round_normx = round(normx, 4)
-                round_normy = round(normy, 4)
-                coords = f"P{count} {round_normx},{round_normy}"
-                cv2.line(frame, (x - 5, y), (x + 5, y), (0, 255, 0), 1)
-                cv2.line(frame, (x, y - 5), (x, y + 5), (0, 255, 0), 1)
-                cv2.putText(frame, text=coords, org=(x-50, y-15), fontScale=1, fontFace=2, color=(0,255,0), thickness=2)
-
-            # Save image
-            output_images = os.path.join(output_path, "images")
-            os.makedirs(output_images, exist_ok=True)
-            output_image_path = os.path.join(output_images, image_filename)
-            cv2.imwrite(output_image_path, frame)
-
-            gt_count = 9
-            len_count = len(selected_detected)
-            if len_count != gt_count:
-                print(f"{len_count} Treffer gefunden und gespeichert unter: {output_image_path}, threshold: {threshold}")
-
-            # Save coords
-            subfolder_output = os.path.join(output_path, subfolder_name + "_coords")
-            os.makedirs(subfolder_output, exist_ok=True)
-            img_name = os.path.splitext(image_filename)[0]
-            output_text_path = os.path.join(subfolder_output, f"coords_{img_name}.json")
-
-            formatted_detections = {}
-
-            for key, detection in selected_detected.items():
-                normx, normy = detection["norm"]
-                x_str = f"{normx:.4f}0000"
-                y_str = f"{normy:.4f}0000"
-                formatted_detections[key] = [x_str, y_str]
-
-            with open(output_text_path, "w") as f:
-                json.dump(formatted_detections, f, indent=2)
 
 def main(root_dir, threshold):
     default_threshold = threshold
@@ -177,15 +275,15 @@ def main(root_dir, threshold):
                     if not os.path.isdir(subfolder_path):
                         continue
 
-                    image_processing_path = os.path.join(subfolder_path, "image_processing")
+                    img_processing_path = os.path.join(subfolder_path, "image_processing")
                     template_path = find_template_file(subfolder_path)
 
-                    if not os.path.isdir(image_processing_path):
-                        print(f"Skipping {subfolder}: no image_processing folder found.")
+                    if not os.path.isdir(img_processing_path):
+                        logger.info(f"Skipping {subfolder}: no image_processing folder found.")
                         continue
 
                     if not os.path.isfile(template_path):
-                        print(f"Skipping {subfolder}: template.png not found.")
+                        logger.info(f"Skipping {subfolder}: template.png not found.")
                         continue
 
                     output_path = os.path.join(subfolder_path, "OpenCV")
@@ -194,15 +292,57 @@ def main(root_dir, threshold):
 
                     threshold = default_threshold
                     if "180" in subfolder_path:
-                        threshold = 0.88
+                        threshold = 0.85
 
-                    find_marker_positions(image_processing_path, template_path, output_path, threshold)
+                    short_path = Path(img_processing_path).parent.name
+                    logging.info(f"working on: {short_path} with threshold {threshold}")
+                    for subfolder_name in os.listdir(img_processing_path):
+                        subfolder_path = os.path.join(img_processing_path, subfolder_name)
+
+                        if not os.path.isdir(subfolder_path):
+                            continue  # skip files
+
+                        for image_filename in os.listdir(subfolder_path):
+                            if not image_filename.lower().endswith(image_endings):
+                                current_path = Path(img_processing_path).parent.name
+                                logging.info(f"Skipping non-image file {image_filename}, {current_path}")
+                                continue  # skip non-image files
+
+                            image_path = os.path.join(subfolder_path, image_filename)
+
+                            current_path = Path(img_processing_path).parent.name
+                            gt_count = 9
+                            current_threshold = threshold
+
+                            if (current_threshold < 0.4):
+                                print("Threshold getting dangerously low...")
+
+                            var = 0
+                            while True:
+                                if var > 35:
+                                    logging.error(f"{image_filename} has too many iterations {var}, will be skipped. {current_path}")
+                                    break
+
+                                detections, frame, image_filename = find_marker_positions(image_path, template_path, img_processing_path, current_threshold, image_filename)
+                                if len(detections) > gt_count:
+                                    #print(f"len(detections): {len(detections)}, used threshold: {current_threshold} in {image_filename}")
+                                    current_threshold += 0.01
+                                    var += 1
+                                elif len(detections) < gt_count:
+                                    #print(f"len(detections): {len(detections)}, used threshold: {current_threshold} in {image_filename}")
+                                    current_threshold -= 0.01
+                                    var += 1
+                                elif len(detections) == gt_count:
+                                    relabeled_detections = relabel_grid_points(detections) 
+                                    save_image_and_json(relabeled_detections, frame, output_path, image_filename, subfolder_name)
+                                    break
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Find dots in extracted frame from video.")
     parser.add_argument("--root_dir", "-r", required=True, help="Path to the root directory containing all folders like P004_statisch, etc.")
     #parser.add_argument("--output_path", "-o", required=True, help="Base output path where results should be saved.")
-    parser.add_argument("--threshold", "-t", type=float, default=0.62, help="Matching threshold for template matching.")
+    parser.add_argument("--threshold", "-t", type=float, default=0.75, help="Matching threshold for template matching.")
 
     args = parser.parse_args()
 
