@@ -10,15 +10,15 @@ import logging
 '''
 Script to find fixation points (dots) in extracted video frames and saving their values to jsonl files. 
 
-LD: Left Down       <-- P9
+LD: Left Down       <-- P7
 MD: Middle Down     <-- P8
-RD: Right Down      <-- P7
-LU: Left Up         <-- P3
+RD: Right Down      <-- P9
+LU: Left Up         <-- P1
 MU: Middle Up       <-- P2
-RU: Right Up        <-- P1
-LM: Left Middle     <-- P6
+RU: Right Up        <-- P3
+LM: Left Middle     <-- P4
 MM: Middle Middle   <-- P5
-RM: Right Middle    <-- P4
+RM: Right Middle    <-- P6
 
 Parameter: 
     frame_path: path to video frames sorted in different subfolders. 
@@ -29,8 +29,11 @@ Methods:
     check_n_del_images: preprocessing subfolders and checking if there are any files that are not images and deleting those. 
     find_marker_positions: using subfolder structure and checking every frame for fixation points and saving those to csv files.
 
-Done: 521: P002, P018, P019, P020, P021, P022, P023, P024, P025, P027
-Skipped: 521: P026
+Done: 521: P002, P018, P019, P020, P021, P022, P023, P024, P025, P027, P028, P032, P036, P035, P034, P031
+Skipped: 521: P029 80_bL manually
+
+Done: 581: P005, P006, P008, P009, P011, P012, P013, P014, P015, P021, P033, P017, P007,
+Skipped: 581: P004 (manually 803L) P010 manually, P016_80_3L manually
 
 '''
 
@@ -48,7 +51,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-to_do_list = ["P028","P029","P030","P031","P032","P034","P035","P036"]
+to_do_list = ["P029"]
 
 image_endings = (".png", ".jpg", ".jpeg")
 
@@ -151,23 +154,23 @@ def filter_detections(detections, w_frame, h_frame, img_processing_path):
     for key, ((x,y), (normx, normy)) in detections.items():
         if "_80" in distance:
             if (normx > 0.85 
-                or normx < 0.15 
-                or normy > 0.9):
+                or normx < 0.13 
+                or normy > 0.85):
                 #print(f"skipping invalid input _80: {normx}, {normy}")
                 del_list_80.append(key)
 
         elif "_120" in distance:
             if (normx < 0.26 
-                or normx > 0.72 
-                or normy < 0.08 
+                or normx > 0.74 
+                or normy < 0.06 
                 or normy > 0.78):
                 #print(f"skipping invalid input _120: {normx}, {normy}")
                 del_list_120.append(key)
 
         elif "_180" in distance:
-            if (normx < 0.35 
+            if (normx < 0.25 
                 or normx > 0.65 
-                or normy < 0.15 
+                or normy < 0.07 
                 or normy > 0.75):
                 #print(f"skipping invalid input _180: {normx}, {normy}")
                 del_list_180.append(key)
@@ -312,6 +315,7 @@ def main(root_dir, threshold):
 
                             current_path = Path(img_processing_path).parent.name
                             gt_count = 9
+                            edgecase = 8
                             current_threshold = threshold
 
                             if (current_threshold < 0.4):
@@ -320,8 +324,12 @@ def main(root_dir, threshold):
                             var = 0
                             while True:
                                 if var > 35:
-                                    logging.error(f"{image_filename} has too many iterations {var}, will be skipped. {current_path}")
-                                    break
+                                    if len(detections) == edgecase or len(detections) == 7 or len(detections) == 6:
+                                        logging.error(f"{image_filename} has too many iterations {var}, but edgecase - check manually! {current_path}")
+                                        relabeled_detections = relabel_grid_points(detections)
+                                        save_image_and_json(relabeled_detections, frame, output_path, image_filename, subfolder_name)
+                                        break
+                                    #break
 
                                 detections, frame, image_filename = find_marker_positions(image_path, template_path, img_processing_path, current_threshold, image_filename)
                                 if len(detections) > gt_count:

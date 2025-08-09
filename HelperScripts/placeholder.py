@@ -1,35 +1,41 @@
 import os
 import json
+import argparse
 
-def clean_gaze_data_files(root_dir):
-    for dirpath, dirnames, filenames in os.walk(root_dir):
-        if os.path.basename(dirpath) == "separated_time_gazedata":
-            for filename in filenames:
-                if filename.endswith(".jsonl"):
-                    input_path = os.path.join(dirpath, filename)
-                    output_path = os.path.join(dirpath, filename.replace(".jsonl", "_cleaned.jsonl"))
+def find_opencv_folders(root_dir):
+    opencv_dirs = []
+    for dirpath, dirnames, _ in os.walk(root_dir):
+        if os.path.basename(dirpath) == "OpenCV":
+            opencv_dirs.append(dirpath)
+    return opencv_dirs
 
+def check_json_files(opencv_dir):
+    for subdir in os.listdir(opencv_dir):
+        subdir_path = os.path.join(opencv_dir, subdir)
+        if os.path.isdir(subdir_path):
+            for file in os.listdir(subdir_path):
+                if file.endswith(".json"):
+                    json_path = os.path.join(subdir_path, file)
                     try:
-                        with open(input_path, 'r') as infile, open(output_path, 'w') as outfile:
-                            for line in infile:
-                                try:
-                                    record = json.loads(line)
-                                    # Extract only desired fields
-                                    cleaned_record = {
-                                        "timestamp": record.get("timestamp"),
-                                        "data": {
-                                            "gaze2d": record["data"].get("gaze2d"),
-                                            "gaze3d": record["data"].get("gaze3d"),
-                                        }
-                                    }
-                                    json.dump(cleaned_record, outfile)
-                                    outfile.write("\n")
-                                except Exception as parse_err:
-                                    print(f"Error parsing line in {filename}: {parse_err}")
-                    except Exception as file_err:
-                        print(f"Error processing {filename}: {file_err}")
+                        with open(json_path, 'r') as f:
+                            data = json.load(f)
+                        if not isinstance(data, dict) or len(data) != 9:
+                            print(f"Invalid! Found {len(data)} in {json_path}, instead of 9 entries.")
+                    except Exception as e:
+                        print(f"Failed to read JSON {json_path}: {e}")
 
-# Run the script
+def main():
+    parser = argparse.ArgumentParser(description="Check JSON files in OpenCV folders for exactly 9 entries.")
+    parser.add_argument("root_dir", help="Root directory to search in")
+    args = parser.parse_args()
+
+    opencv_dirs = find_opencv_folders(args.root_dir)
+    if not opencv_dirs:
+        print("No 'OpenCV' folders found.")
+        return
+
+    for opencv_dir in opencv_dirs:
+        check_json_files(opencv_dir)
+
 if __name__ == "__main__":
-    root_directory = "..\\..\\WorkingFolder_Python\\Conv2D_to3D\\581_stat_conv"
-    clean_gaze_data_files(root_directory)
+    main()
