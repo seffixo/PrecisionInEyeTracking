@@ -51,7 +51,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-to_do_list = ["P029"]
+to_do_list = ["P002"]
 
 image_endings = (".png", ".jpg", ".jpeg")
 
@@ -155,7 +155,7 @@ def filter_detections(detections, w_frame, h_frame, img_processing_path):
         if "_80" in distance:
             if (normx > 0.85 
                 or normx < 0.13 
-                or normy > 0.85):
+                or normy > 0.89):
                 #print(f"skipping invalid input _80: {normx}, {normy}")
                 del_list_80.append(key)
 
@@ -326,9 +326,9 @@ def main(root_dir, threshold):
                                 if var > 35:
                                     if len(detections) == edgecase or len(detections) == 7 or len(detections) == 6:
                                         logging.error(f"{image_filename} has too many iterations {var}, but edgecase - check manually! {current_path}")
-                                        relabeled_detections = relabel_grid_points(detections)
-                                        save_image_and_json(relabeled_detections, frame, output_path, image_filename, subfolder_name)
-                                        break
+                                        #relabeled_detections = relabel_grid_points(detections)
+                                        #save_image_and_json(relabeled_detections, frame, output_path, image_filename, subfolder_name)
+                                        #break
                                     #break
 
                                 detections, frame, image_filename = find_marker_positions(image_path, template_path, img_processing_path, current_threshold, image_filename)
