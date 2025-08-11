@@ -17,7 +17,7 @@ COORDS_DIR_RE = re.compile(r"^(RU|MU|LU|LD|MD|RD|MM|LM|RM)_coords$", re.IGNORECA
 # Example filename: coords_LD_timestamp52.5.json
 FILENAME_TS_RE = re.compile(r"_timestamp([0-9]+(?:\.[0-9]+)?)", re.IGNORECASE)
 # Accept prefixes like P0XX_80_bL / 120_bL / 180_bL / 80_3L / 120_3L / 180_3L
-PREFIX_RE = re.compile(r"^(P0\d{2})_(80|120|180)(cm)?(?:_[^_]+)?_(basicL|bL|3lights|3light|3L)$",re.IGNORECASE)
+PREFIX_RE = re.compile(r"^(P0\d{2})(?:_[^_]+)?_(80|120|180)(cm)?(?:_[^_]+)?_(basicL|bL|3lights|3light|3L)$",re.IGNORECASE)
 
 
 
@@ -217,6 +217,114 @@ def check_outliers(results_by_region: Dict[str, List[Dict[str, Any]]], prefix: s
 
     return results_by_region
 
+def check_outliers_hampel(results_by_region: Dict[str, List[Dict[str, Any]]],
+                          prefix: str,
+                          window: int = 21,      # odd window size is best
+                          k: float = 3.0,        # sensitivity (higher = fewer flags)
+                          deadband: float = 0.0005,  # ignore tiny diffs
+                          require_both: bool = False  # flag only if BOTH x and y are out
+                          ) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Rolling Hampel outlier check (per region), interactive removal.
+    Uses local median ± k * (1.4826 * MAD) with a deadband.
+    Coordinates are parsed to floats for checking; records stay in their original string format.
+    """
+    def median(vals):
+        s = sorted(vals)
+        n = len(s)
+        if n == 0:
+            return float("nan")
+        mid = n // 2
+        if n % 2:
+            return s[mid]
+        return 0.5 * (s[mid - 1] + s[mid])
+
+    def mad(vals, med):
+        return median([abs(v - med) for v in vals])
+
+    # ensure odd window
+    if window < 3:
+        window = 3
+    if window % 2 == 0:
+        window += 1
+    half = window // 2
+
+    for region, records in results_by_region.items():
+        if not records:
+            continue
+        n = len(records)
+        if n < 5:
+            print(f"[INFO] {region}: Too few records ({n}) for robust local check.")
+            continue
+
+        # parse floats
+        xs = []
+        ys = []
+        for r in records:
+            try:
+                xs.append(float(r["detection"][0]))
+                ys.append(float(r["detection"][1]))
+            except Exception:
+                xs.append(float("nan"))
+                ys.append(float("nan"))
+
+        to_remove = []
+        for i in range(n):
+            # window bounds
+            lo = max(0, i - half)
+            hi = min(n, i + half + 1)
+            # exclude point itself for robustness
+            win_x = xs[lo:i] + xs[i+1:hi]
+            win_y = ys[lo:i] + ys[i+1:hi]
+            # need enough neighbors
+            if len(win_x) < max(4, window // 2):
+                continue
+            # remove NaNs
+            wx = [v for v in win_x if v == v]
+            wy = [v for v in win_y if v == v]
+            if len(wx) < 4 or len(wy) < 4:
+                continue
+
+            med_x = median(wx)
+            med_y = median(wy)
+            mad_x = mad(wx, med_x)
+            mad_y = mad(wy, med_y)
+            # scaled MAD ~ robust std
+            sigma_x = 1.4826 * mad_x if mad_x > 0 else 0.0
+            sigma_y = 1.4826 * mad_y if mad_y > 0 else 0.0
+
+            # if local variation is basically zero, skip flagging unless very large diff
+            thr_x = k * sigma_x + deadband
+            thr_y = k * sigma_y + deadband
+
+            dx = abs(xs[i] - med_x)
+            dy = abs(ys[i] - med_y)
+
+            flag_x = sigma_x == 0.0 and dx > deadband or (sigma_x > 0.0 and dx > thr_x)
+            flag_y = sigma_y == 0.0 and dy > deadband or (sigma_y > 0.0 and dy > thr_y)
+
+            flag = (flag_x and flag_y) if require_both else (flag_x or flag_y)
+            if not flag:
+                continue
+
+            # interactive prompt
+            rec = records[i]
+            print(f"\n[OUTLIER] Region: {region}, Folder: {prefix}")
+            print(f" Timestamp: {rec['timestamp']}")
+            print(f" Detection: x: {rec['detection'][0]}, y: {rec['detection'][1]}")
+            # show local stats (rounded for readability)
+            print(f" Local med ± thr  (x): {med_x:.6f} ± {thr_x:.6f}  (dx={dx:.6f})")
+            print(f" Local med ± thr  (y): {med_y:.6f} ± {thr_y:.6f}  (dy={dy:.6f})")
+            choice = input(" Remove this outlier? (y/n): ").strip().lower()
+            if choice == "y":
+                to_remove.append(i)
+
+        for idx in reversed(to_remove):
+            removed = records.pop(idx)
+            print(f"[INFO] Removed outlier: ts={removed['timestamp']} det={removed['detection']}")
+
+    return results_by_region
+
 
 def write_results(interpolation_dir: str, prefix: str, results_by_region: Dict[str, List[Dict[str, Any]]]) -> None:
     for region, records in results_by_region.items():
@@ -263,7 +371,15 @@ def main():
             print(f"[INFO] No usable detections in: {dirpath}")
             continue
         
-        results_by_region = check_outliers(results_by_region, prefix, factor=1.5)
+        #results_by_region = check_outliers(results_by_region, prefix, factor=1.5)
+        results_by_region = check_outliers_hampel(
+            results_by_region,
+            prefix=prefix,
+            window=31,       # try 21, 31, or 41 depending on your sampling rate
+            k=3.0,           # increase to 3.5–4.5 if it still feels too sensitive
+            deadband=0.01, # widen if you see many near-threshold flags (e.g., 0.001)
+            require_both=False  # set True to only flag when BOTH x and y deviate
+        )
         interpolation_dir = locate_interpolation_dir(dirpath)
         write_results(interpolation_dir, prefix, results_by_region)
 
