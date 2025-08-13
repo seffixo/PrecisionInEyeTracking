@@ -6,6 +6,7 @@ import numpy as np
 from numpy.linalg import norm
 from math import degrees
 from pathlib import Path
+from collections import defaultdict
 
 # Regex to match the main folder pattern
 PREFIX_RE = re.compile(r"^(P0\d{2})(?:_[^_]+)?_(80|120|180)(cm)?(?:_[^_]+)?_(basicL|bL|3lights|3light|3L)$", re.IGNORECASE)
@@ -31,7 +32,20 @@ def calculate_mae(gaze_vecs, gt_vecs):
     # Return MAE (mean angular error) and count
     return np.mean(angular_errors_deg), len(angular_errors_deg)
 
+def extract_distance_lighting(base):
+    # Example base: P002_120_3L → extract "120" and "3L"
+    parts = base.split("_")
+    if len(parts) >= 3:
+        distance = parts[1]
+        lighting = parts[2]
+        return f"{distance}_{lighting}"
+    else:
+        return "unknown"
+
 def process_folder(root_dir):
+    #store vectors grouped by label
+    grouped_vectors = defaultdict(lambda: {'gaze': [], 'gt': []})
+
     for root, dirs, files in os.walk(root_dir):
         folder_name = os.path.basename(root)
         if PREFIX_RE.match(folder_name):
@@ -47,6 +61,8 @@ def process_folder(root_dir):
                     continue
 
                 label, base = match.groups()
+                group_key = f"{label}_{extract_distance_lighting(base)}"
+
                 gt_file = f"{base}_{label}.csv"
 
                 gaze_path = os.path.join(normalized_gaze_path, gaze_file)
@@ -67,19 +83,30 @@ def process_folder(root_dir):
                 gaze_vecs = df_merged[['dir_cam_x_gaze', 'dir_cam_y_gaze', 'dir_cam_z_gaze']].to_numpy()
                 gt_vecs = df_merged[['dir_cam_x_gt', 'dir_cam_y_gt', 'dir_cam_z_gt']].to_numpy()
 
-                mae, count = calculate_mae(gaze_vecs, gt_vecs)
-                if count < 100: 
-                    print(f"warning: very little matched timestamps in {Path(root).name}")
+                print(f"grouping vectors for group {group_key} {base}")
+                grouped_vectors[group_key]['gaze'].append(gaze_vecs)
+                grouped_vectors[group_key]['gt'].append(gt_vecs)
 
-                # Output to file
-                output_filename = gaze_file.replace("_filtered_gaze.csv", "_accuracy.txt")
-                output_folder = os.path.join(root, "accuracy")
-                if not os.path.exists(output_folder):
-                    os.makedirs(output_folder)
-                output_path = os.path.join(output_folder, output_filename)
-                with open(output_path, "w") as f:
-                    f.write(f"Mean Angular Error (degrees): {mae:.4f}\n")
-                    f.write(f"Matched timestamps: {count}\n")
+    # Output to file
+    output_base = os.path.join(root_dir, "grouped_accuracy")
+    os.makedirs(output_base, exist_ok=True)
+
+    for group_key, data in grouped_vectors.items():
+        all_gaze = np.vstack(data['gaze'])  #stack all gaze vectors
+        all_gt = np.vstack(data['gt'])      #stack all ground truth, image vectors
+
+        mae, count = calculate_mae(all_gaze, all_gt)
+
+        group_folder = os.path.join(output_base, group_key)
+        os.makedirs(group_folder, exist_ok=True)
+
+        output_path = os.path.join(group_folder, f"{group_key}_group_acc.txt")
+        with open(output_path, "w") as f:
+            f.write(f"Group: {group_key}\n")
+            f.write(f"Mean Angular Error (degrees): {mae:.4f}\n")
+            f.write(f"Matched timestamps: {count}\n")
+
+        print(f"[{group_key}] MAE: {mae:.2f}° over {count} samples.")
 
 if __name__ == "__main__":
     import sys
