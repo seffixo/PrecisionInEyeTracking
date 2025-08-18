@@ -22,7 +22,7 @@ def calculate_mae(gaze_vecs, gt_vecs):
     # Compute dot product between corresponding vectors
     dot_products = np.sum(gaze_vecs_normalized * gt_vecs_normalized, axis=1)
 
-    # Clip for numerical stability
+    # Clip for numerical stability to avoid 1.00000000001
     dot_products = np.clip(dot_products, -1.0, 1.0)
 
     # Angular error (in radians) -> then degrees
@@ -49,6 +49,7 @@ def process_folder(root_dir):
     for root, dirs, files in os.walk(root_dir):
         folder_name = os.path.basename(root)
         if PREFIX_RE.match(folder_name):
+            print(f"working with {Path(folder_name).name}")
             normalized_gt_path = os.path.join(root, "interpolation", "gt_data", "normalized_gt")
             normalized_gaze_path = os.path.join(root, "filtered_gazedata", "normalized_gazedata")
 
@@ -83,7 +84,7 @@ def process_folder(root_dir):
                 gaze_vecs = df_merged[['dir_cam_x_gaze', 'dir_cam_y_gaze', 'dir_cam_z_gaze']].to_numpy()
                 gt_vecs = df_merged[['dir_cam_x_gt', 'dir_cam_y_gt', 'dir_cam_z_gt']].to_numpy()
 
-                print(f"grouping vectors for group {group_key} {base}")
+                #print(f"grouping vectors for group {group_key} {base}")
                 grouped_vectors[group_key]['gaze'].append(gaze_vecs)
                 grouped_vectors[group_key]['gt'].append(gt_vecs)
 
