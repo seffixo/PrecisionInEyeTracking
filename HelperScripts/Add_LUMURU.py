@@ -1,5 +1,6 @@
 import os
 import argparse
+from pathlib import Path
 
 # The fixed labels in order
 '''
@@ -13,7 +14,10 @@ LD == Left Down
 MD == Middle Down
 RD == Right Down
 '''
-REGION_LABELS = ['LU', 'MU', 'RU', 'LM', 'MM', 'RM', 'LD', 'MD', 'RD']
+#static labels:
+#REGION_LABELS = ['LU', 'MU', 'RU', 'LM', 'MM', 'RM', 'LD', 'MD', 'RD']
+#dynamic labels:
+REGION_LABELS = ['MM']
 
 def label_event_time_ranges(file_path):
     try:
@@ -28,7 +32,7 @@ def label_event_time_ranges(file_path):
         for label, line in zip(REGION_LABELS, lines):
             line = line.strip()
             if line:  # Only label non-empty lines
-                new_lines.append(f"{label},{line}")
+                    new_lines.append(f"{label},{line}")
 
         with open(file_path, 'w', encoding='utf-8') as f:
             for line in new_lines:

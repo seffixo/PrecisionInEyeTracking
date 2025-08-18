@@ -3,6 +3,7 @@ import json
 import argparse
 import gzip
 import shutil
+from pathlib import Path
 
 
 def rename_participant_folders(root_dir):
@@ -53,6 +54,17 @@ def extract_and_generate_mouseclick_ranges(meta_path, output_path):
     """
     json_files = [f for f in os.listdir(meta_path) if f.endswith('.json')]
     timestamps = []
+    parent_path = Path(meta_path).parent
+    
+    if not json_files: 
+        print(f"there were no json files found inside {Path(meta_path).parent.name}")
+        for f in os.listdir(parent_path):
+            if f.endswith('.txt') and "time_" in f:
+                new_name = os.path.join(parent_path, "Event_time_ranges.txt")
+                old_name = os.path.join(parent_path, f)
+                os.rename(old_name, new_name)
+                print(f"found txt file in {parent_path} and renamed it.")
+        return
 
     for json_file in json_files:
         file_path = os.path.join(meta_path, json_file)

@@ -29,7 +29,7 @@ from pathlib import Path
 import logging
 
 # Setup basic logging
-log_path = r"D:\WorkingFolder_PythonD\2Dto3D_Conversion\521_stat_conv\filter_gaze.log"
+log_path = r"D:\WorkingFolder_PythonD\2Dto3D_Conversion\581_dynam\filter_gaze.log"
 
 logging.basicConfig(
     level=logging.INFO,  # Change to DEBUG, WARNING, etc. as needed

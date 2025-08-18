@@ -37,7 +37,8 @@ def dump_python_arrays(img_pts, obj_pts, output_path):
 def process_all_folders(root_dir):
     for dirpath, _, filenames in os.walk(root_dir):
         has_event_file = any(f.lower() == "event_time_ranges.txt" for f in filenames)
-        filtered_files = [f for f in filenames if f.startswith("filtered_gazedata") and f.endswith(".jsonl")]
+        #filtered_files = [f for f in filenames if f.startswith("filtered_gazedata") and f.endswith(".jsonl")]
+        filtered_files = [f for f in filenames if f.startswith("gazedata_P")]
 
         if not has_event_file or not filtered_files:
             continue  # Skip folders missing needed files
@@ -59,5 +60,5 @@ def process_all_folders(root_dir):
             print(f"{fname}: wrote {len(img_pts)} points to {output_path}")
 
 if __name__ == "__main__":
-    ROOT_DIR = os.path.abspath("../HelperScripts/Recordings_static")
+    ROOT_DIR = "D:\WorkingFolder_PythonD\special_dynam"
     process_all_folders(ROOT_DIR)
