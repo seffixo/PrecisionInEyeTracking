@@ -1,11 +1,14 @@
 import subprocess 
 from pathlib import Path
+import sys
+
+PY = sys.executable
 
 # Step 1: Base directory
-root_dir = Path(r"..\..\WorkingFolder_Python\Conv2D_to3D\581_stat_conv").resolve()
+root_dir = Path(r"D:\WorkingFolder_PythonD\2Dto3D_Conversion\521_dynam").resolve()
 
 # Step 2: Loop through each "P0xx_statisch" folder
-for stat_dir in root_dir.glob("P0*_statisch_teils"):
+for stat_dir in root_dir.glob("P0*_dynamisch"):
     if not stat_dir.is_dir():
         continue
 
@@ -17,7 +20,7 @@ for stat_dir in root_dir.glob("P0*_statisch_teils"):
             print(f"Running checkParam_3dto2d with paramFolder: {paramFolder}")
 
             subprocess.run([
-                "python", "checkParam_3dto2d.py",
+                PY, "checkParam_3dto2d.py",
                 "--root_dir", str(root_dir),
                 "--camParaFolder", paramFolder
             ])
@@ -32,7 +35,7 @@ for stat_dir in root_dir.glob("P0*_statisch_teils"):
             result_name = name + "_ConvResults.json"
 
             subprocess.run([
-                "python", "checkConversion.py",
+                PY, "checkConversion.py",
                 "--root_dir", str(root_dir),
                 "--result_name", result_name
             ])

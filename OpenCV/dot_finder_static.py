@@ -29,16 +29,17 @@ Methods:
     check_n_del_images: preprocessing subfolders and checking if there are any files that are not images and deleting those. 
     find_marker_positions: using subfolder structure and checking every frame for fixation points and saving those to csv files.
 
-Done: 521: P002, P018, P019, P020, P021, P022, P023, P024, P025, P027, P028, P032, P036, P035, P034, P031
-Skipped: 521: P029 80_bL manually
+statisch:
+    Done: 521: P002, P018, P019, P020, P021, P022, P023, P024, P025, P027, P028, P032, P036, P035, P034, P031
+    Skipped: 521: P029 80_bL manually
 
-Done: 581: P005, P006, P008, P009, P011, P012, P013, P014, P015, P021, P033, P017, P007,
-Skipped: 581: P004 (manually 803L) P010 manually, P016_80_3L manually
+    Done: 581: P005, P006, P008, P009, P011, P012, P013, P014, P015, P021, P033, P017, P007,
+    Skipped: 581: P004 (manually 803L) P010 manually, P016_80_3L manually
 
 '''
 
 # Setup basic logging
-log_path = r"D:\WorkingFolder_PythonD\2Dto3D_Conversion\521_stat_conv\my_log.log"
+log_path = r"D:\WorkingFolder_PythonD\test_usingStat_dynam\dot_finder.log"
 
 logging.basicConfig(
     level=logging.INFO,  # Change to DEBUG, WARNING, etc. as needed
@@ -51,7 +52,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-to_do_list = ["P002"]
+to_do_list = ["P018"]
 
 image_endings = (".png", ".jpg", ".jpeg")
 
@@ -314,7 +315,7 @@ def main(root_dir, threshold):
                             image_path = os.path.join(subfolder_path, image_filename)
 
                             current_path = Path(img_processing_path).parent.name
-                            gt_count = 9
+                            gt_count = 9 
                             edgecase = 8
                             current_threshold = threshold
 
@@ -324,12 +325,13 @@ def main(root_dir, threshold):
                             var = 0
                             while True:
                                 if var > 35:
+                                    #statisch: 7 und 6 als weitere optionen
                                     if len(detections) == edgecase or len(detections) == 7 or len(detections) == 6:
                                         logging.error(f"{image_filename} has too many iterations {var}, but edgecase - check manually! {current_path}")
-                                        #relabeled_detections = relabel_grid_points(detections)
-                                        #save_image_and_json(relabeled_detections, frame, output_path, image_filename, subfolder_name)
-                                        #break
-                                    #break
+                                        relabeled_detections = relabel_grid_points(detections)
+                                        save_image_and_json(relabeled_detections, frame, output_path, image_filename, subfolder_name)
+                                        break
+                                    break
 
                                 detections, frame, image_filename = find_marker_positions(image_path, template_path, img_processing_path, current_threshold, image_filename)
                                 if len(detections) > gt_count:
