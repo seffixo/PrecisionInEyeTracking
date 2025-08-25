@@ -88,5 +88,5 @@ def process_all_conversions(root_dir, image_size=(1920, 1080)):
             print(f"Fehler in {dirpath}: {e}")
 
 if __name__ == "__main__":
-    ROOT_DIR = "D:\WorkingFolder_PythonD\special_dynam"
+    ROOT_DIR = "D:\\WorkingFolder_PythonD\\2Dto3D_Conversion\\581_dynam"
     process_all_conversions(ROOT_DIR)

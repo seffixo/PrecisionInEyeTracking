@@ -60,5 +60,5 @@ def process_all_folders(root_dir):
             print(f"{fname}: wrote {len(img_pts)} points to {output_path}")
 
 if __name__ == "__main__":
-    ROOT_DIR = "D:\WorkingFolder_PythonD\special_dynam"
+    ROOT_DIR = "D:\\WorkingFolder_PythonD\\2Dto3D_Conversion\\521_dynam"
     process_all_folders(ROOT_DIR)
