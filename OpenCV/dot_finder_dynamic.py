@@ -26,7 +26,7 @@ Methods:
 '''
 
 # Setup basic logging
-log_path = r"D:\WorkingFolder_PythonD\2Dto3D_Conversion\581_dynam\dot_finder_dynam_test002_020_021_022.log"
+log_path = r"D:\WorkingFolder_PythonD\test_usingStat_dynam\dot_finder_stat9Dots.log"
 
 logging.basicConfig(
     level=logging.INFO,  # Change to DEBUG, WARNING, etc. as needed
@@ -39,7 +39,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-to_do_list = ["P002", "P020", "P021", "P022"]
+to_do_list = ["P020"]
 
 image_endings = (".png", ".jpg", ".jpeg")
 
@@ -149,7 +149,7 @@ def filter_detections(detections, w_frame, h_frame, img_processing_path, edgecas
     distance = current_path.parent.parent.name
     interval = current_path.name
     filtered_detections = {}
-    static = False
+    static = True
     #print("raw detections: ", len(raw_detections))
     #print("parent folder name: ", distance)
 
@@ -398,22 +398,24 @@ def check_previous_img_to_compare(list_prev_timestamps, current_image_filename, 
         data = json.load(j)
 
         if len(data) > 1:
-            print(f"something went wrong in the previous file: {previous_json} in {img_int_path}. More than one entry!")
+            logging.debug(f"something went wrong in the previous file: {previous_json} in {img_int_path}. More than one entry!")
 
         elif len(data) == 1:
             key, coords = next(iter(data.items()))
             prev_x, prev_y = map(float, coords)
         
         if len(current_detections) == 0:
-            h_frame, w_frame = frame.shape[:2]
-            a = int(round(prev_x * w_frame))
-            b = int(round(prev_y * h_frame))
+            logging.error(f"current_detection still zero, cant proceed {current_image_filename} in {img_int_path}")
+            return 1
+            #h_frame, w_frame = frame.shape[:2]
+            #a = int(round(prev_x * w_frame))
+            #b = int(round(prev_y * h_frame))
             #clamp coordinates, to ensure they stay inside frame (safety net)
-            px_a = max(0, min(w_frame - 1, a))
-            py_b = max(0, min(h_frame - 1, b))
-            logging.debug(f"set {current_image_filename} to {previous_json}")
-            keeping_detections = {key: ((px_a, py_b), (prev_x, prev_y))}
-            return keeping_detections
+            #px_a = max(0, min(w_frame - 1, a))
+            #py_b = max(0, min(h_frame - 1, b))
+            #logging.debug(f"set {current_image_filename} to {previous_json}")
+            #keeping_detections = {key: ((px_a, py_b), (prev_x, prev_y))}
+            #return keeping_detections
         
         for key, ((a, b), (cur_x, cur_y)) in current_detections.items():
             # compute distance to previous point
@@ -494,63 +496,29 @@ def main(root_dir, threshold):
 
                             var = 0
                             while True:
-                                
-                                detections, frame, image_filename = find_marker_positions(image_path, template_path, img_int_path, current_threshold, image_filename, edgecase)
-                                
-                                if len(detections) != 1:
-                                    current_threshold -= 0.01
-                                    #template = Path(template_path).name
-                                    #logging.info(f"changing threshold for {image_filename} in {subfolder} in {short_path} using {template} to {current_threshold}.")
-                                    var += 1
-
-                                if len(detections) == 1 or edgecase == 1:
-                                    #relabeled_detections = relabel_grid_points(detections)
-                                    if len(detections) < 1:
-                                        #try one more time
-                                        detections, frame, image_filename = find_marker_positions(image_path, template_path, img_int_path, current_threshold, image_filename, edgecase)
-                                    
-                                    if len(detections) >= 1:
-                                        save_image_and_json(detections, frame, output_path, image_filename, img_int_path)
-                                        filename = image_filename.split("timestamp")[1]
-                                        timestamp = filename.split(".png")[0]
-                                        all_saved_timestamps.append(float(timestamp))
+                                if var > 35:
+                                    #statisch: 7 und 6 als weitere optionen
+                                    if len(detections) == 8 or len(detections) == 7 or len(detections) == 6 or len(detections) == 5:
+                                        logging.error(f"{image_filename} has too many iterations {var}, but edgecase - check manually! {subfolder}, {short_path}")
+                                        relabeled_detections = relabel_grid_points(detections)
+                                        save_image_and_json(relabeled_detections, frame, output_path, image_filename, img_int_path)
                                         break
-
-                                if len(detections) > 1 and len(all_saved_timestamps) > 0:
-                                    logging.info(f"trying to check previous image. current: {image_filename}, {subfolder}, {short_path}")
-                                    final_detections = check_previous_img_to_compare(all_saved_timestamps, image_filename, detections, frame, img_int_path)
-                                    if len(final_detections) == 1:
-                                        save_image_and_json(final_detections, frame, output_path,image_filename, img_int_path)
-                                        filename = image_filename.split("timestamp")[1]
-                                        timestamp = filename.split(".png")[0]
-                                        all_saved_timestamps.append(float(timestamp))
-                                        break
-                                    else: 
-                                        logging.info(f"something went wrong, still more than one detection found in: {image_filename}, {subfolder}, {short_path}")
                                     break
 
-                                if var > 35 and len(detections) != 1:
-                                    if len(all_saved_timestamps) == 0:
-                                        edgecase = 1
-                                        break
-                                    else:
-                                        logging.info(f"detections still {len(detections)}, try previous one. current: {image_filename}, {subfolder}, {short_path}")
-                                        final_detections = check_previous_img_to_compare(all_saved_timestamps, image_filename, detections, frame, img_int_path)
-                                        if len(final_detections) == 1:
-                                            new_img_filename = "prev_" + image_filename
-                                            save_image_and_json(final_detections, frame, output_path,new_img_filename, img_int_path)
-                                            filename = image_filename.split("timestamp")[1]
-                                            timestamp = filename.split(".png")[0]
-                                            all_saved_timestamps.append(float(timestamp))
-                                            break
-                                        else: 
-                                            logging.info(f"something went wrong, still more than one detection found in: {image_filename}, {subfolder}, {short_path}")
-                                        break
+                                detections, frame, image_filename = find_marker_positions(image_path, template_path, img_int_path, current_threshold, image_filename, edgecase)
                                 
-                                #if current_threshold < 0.40:
-                                    #logging.error(f"more than 35 iterations have been made: saving {image_filename}, {subfolder}, {short_path} raw for now.")
-                                    edgecase = 1
-                                    logging.error(f"threshold got below 0.40 for: {image_filename}, {subfolder}, {short_path}, edgecase set.")
+                                if len(detections) > 9:
+                                    #print(f"len(detections): {len(detections)}, used threshold: {current_threshold} in {image_filename}")
+                                    current_threshold += 0.01
+                                    var += 1
+                                elif len(detections) < 9:
+                                    #print(f"len(detections): {len(detections)}, used threshold: {current_threshold} in {image_filename}")
+                                    current_threshold -= 0.01
+                                    var += 1
+                                elif len(detections) == 9:
+                                    relabeled_detections = relabel_grid_points(detections) 
+                                    save_image_and_json(relabeled_detections, frame, output_path, image_filename, img_int_path)
+                                    break
 
 
 if __name__ == "__main__":

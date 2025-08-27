@@ -116,7 +116,8 @@ def setTemplates(output_path):
             print(f"{og_path} was copied as {template_name}.")
 
 def process_all_recordings(base_folder, type):
-    to_do = {"P002", "P018", "P019", "P020", "P021", "P022", "P023", "P024", "P025", "P026", "P027", "P028", "P029", "P030", "P031", "P032", "P034", "P035", "P036"}
+    #to do list to pick every folder you want to extract frames for
+    to_do = {"P004"}
     for item in os.listdir(base_folder):
         item_path = os.path.join(base_folder, item)
         if os.path.isdir(item_path) and any(item.startswith(p) for p in to_do):
