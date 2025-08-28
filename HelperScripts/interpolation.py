@@ -12,7 +12,7 @@ Usage:
 """
 
 # Setup basic logging
-log_path = r"D:\WorkingFolder_PythonD\2Dto3D_Conversion\521_stat_conv\interpolation.log"
+log_path = r"D:\WorkingFolder_PythonD\2Dto3D_Conversion\581_dynam\interpolation.log"
 
 logging.basicConfig(
     level=logging.INFO,  # Change to DEBUG, WARNING, etc. as needed

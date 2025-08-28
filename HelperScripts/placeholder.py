@@ -1,138 +1,100 @@
 #!/usr/bin/env python3
-import argparse
 import os
 import re
-import shutil
+import csv
 from pathlib import Path
+from typing import Dict, Optional, Tuple, List
+from collections import namedtuple
+import pandas as pd
+from dataclasses import asdict, is_dataclass
+'''
+Extract information for every participant to enable box plot creation. 
+- camera_id
+- participant_id
+- label
+- distance
+- lighting
+- angular_error
+- matchings
 
-# Your prefix regex (folder name) – case-insensitive
-PREFIX_RE = re.compile(
-    r"^(P0\d{2})(?:_[^_]+)?_(80|120|180)(cm)?(?:_[^_]+)?_(basicL|bL|3lights|3light|3L)$",
-    re.IGNORECASE,
+'''
+
+# --------- regex helpers ---------
+pattern = re.compile(
+    r'^(?:LM|RM|MM|LU|RU|MU|LD|RD|MD)_'   # label
+    r'(P0\d{2})_'                         # participant
+    r'(80|120|180)_'                      # distance
+    r'(bL|3L)_'                           # lighting
+    r'.*\.txt$'                           # trailing extra text + .txt
 )
+camera = re.compile(r'(521|581)')
 
-FILES_NEEDED = ("poster_reference.png", "poster_targets.json")
 
-def normalize_lights(label: str) -> str:
-    """Map variations to canonical values: 'bL' or '3L'."""
-    l = label.lower()
-    if l in ("basicl", "bl"):
-        return "bL"
-    if l in ("3l", "3light", "3lights"):
-        return "3L"
-    return label  # fallback (shouldn't happen with this regex)
 
-def match_key_from_foldername(name: str):
-    """
-    Return (size, lights) tuple if folder name matches PREFIX_RE,
-    with lights normalized and size as plain digits (no 'cm').
-    """
-    m = PREFIX_RE.match(name)
-    if not m:
-        return None
-    _, size, cm, lights = m.groups()
-    size_clean = size  # '80'|'120'|'180'
-    lights_norm = normalize_lights(lights)
-    return (size_clean, lights_norm)
+def append_csv(row, out_csv: Path) -> None:
+    #namedtuple -> dict
+    data = row._asdict()
+    fieldnames = ['camera_id','participant_id','label','distance','lighting','angular_error','matchings']
 
-def find_matching_folders(base_dir: Path):
-    """
-    Recursively yield (folder_path, key) for every directory under base_dir
-    whose name matches PREFIX_RE.
-    """
-    for folder in base_dir.rglob("*"):
-        if folder.is_dir():
-            key = match_key_from_foldername(folder.name)
-            if key:
-                yield folder, key
+    file_exists = out_csv.exists()
+    with out_csv.open('a', newline='', encoding='utf-8') as f:
+        w = csv.writer(f)
+       
+        if not file_exists or out_csv.stat().st_size == 0:
+            w.writerow(fieldnames)
+        
+        w.writerow([data[field] for field in fieldnames])
 
-def source_lookup(source_dir: Path):
-    """
-    Build a dictionary: (size, lights) -> source_folder_path
-    Only include folders that actually contain both required files.
-    If multiple exist, first one found wins.
-    """
-    lookup = {}
-    for folder, key in find_matching_folders(source_dir):
-        have_all = all((folder / f).is_file() for f in FILES_NEEDED)
-        if have_all and key not in lookup:
-            lookup[key] = folder
-    return lookup
+    print(f"Wrote rows to {out_csv}")
 
-def copy_missing_files(src_folder: Path, dst_folder: Path):
-    """
-    Copy needed files from src to dst if they are missing in dst.
-    Returns list of copied file names.
-    """
-    copied = []
-    for fname in FILES_NEEDED:
-        src = src_folder / fname
-        dst = dst_folder / fname
-        if not dst.exists():
-            if src.exists():
-                shutil.copy2(src, dst)
-                copied.append(fname)
-            else:
-                # Shouldn't happen because we validated sources, but guard anyway
-                print(f"[WARN] Source file missing: {src}")
-    return copied
-
-def main():
-    ap = argparse.ArgumentParser(
-        description="Fill poster files in target folders by matching (size, lights) from source folders."
-    )
-    ap.add_argument("--source_dir", "-s", type=Path, help="First directory (provides reference files)")
-    ap.add_argument("--target_dir", "-t", type=Path, help="Second directory (folders to fill)")
-    ap.add_argument("--dry-run", action="store_true", help="Show what would be copied without changing files")
-    args = ap.parse_args()
-
-    src_dir = args.source_dir.resolve()
-    dst_dir = args.target_dir.resolve()
-
-    if not src_dir.is_dir():
-        raise SystemExit(f"Source directory not found: {src_dir}")
-    if not dst_dir.is_dir():
-        raise SystemExit(f"Target directory not found: {dst_dir}")
-
-    lookup = source_lookup(src_dir)
-    if not lookup:
-        print(f"[INFO] No valid source folders with both files found in {src_dir}.")
-    else:
-        print(f"[INFO] Found {len(lookup)} source groups (by (size, lights)).")
-
-    total_copied = 0
-    total_targets = 0
-
-    for tgt_folder, key in find_matching_folders(dst_dir):
-        total_targets += 1
-        # Skip if target already has both files
-        if all((tgt_folder / f).is_file() for f in FILES_NEEDED):
-            print(f"[SKIP] {tgt_folder.name} already has both files.")
-            continue
-
-        src_folder = lookup.get(key)
-        if not src_folder:
-            print(f"[MISS] No source for {tgt_folder.name} with key {key}.")
-            continue
-
-        print(f"[MATCH] {tgt_folder.name} <= {src_folder.name} (key={key})")
-        if args.dry_run:
-            # Show which files would be copied
-            would_copy = [f for f in FILES_NEEDED if not (tgt_folder / f).exists()]
-            if would_copy:
-                print(f"  [DRY-RUN] Would copy: {', '.join(would_copy)}")
-            else:
-                print("  [DRY-RUN] Nothing to copy (already present).")
-        else:
-            copied = copy_missing_files(src_folder, tgt_folder)
-            if copied:
-                print(f"  [COPIED] {', '.join(copied)}")
-                total_copied += len(copied)
-            else:
-                print("  [INFO] Nothing copied (already present).")
-
-    print(f"\n[SUMMARY] Targets scanned: {total_targets}")
-    print(f"[SUMMARY] Files copied: {total_copied}")
+def find_median_folders(root):
+    #look through all subfolders and find median folder
+    root_path = Path(root)
+    return [p for p in root_path.rglob("median_accuracy") if p.is_dir()]
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    ap = argparse.ArgumentParser(description="Scan for 'median_accuracy' folders and extract metadata + angular_error.")
+    ap.add_argument("--root", "-r", help="Root directory to scan (e.g., D:\\WorkingFolder_PythonD\\2Dto3D_Conversion)")
+    ap.add_argument("-o", "--out", default="median_accuracy_summary.csv", help="Output CSV filename (default: %(default)s)")
+    args = ap.parse_args()
+
+    out_csv = Path(args.out)
+    median_folders = find_median_folders(args.root)
+    for folder in median_folders: 
+        for file in os.listdir(folder):
+            if file.endswith(".txt"):
+                #file should look like: label_participant_distance_lighting_median_acc.txt
+                file_name = Path(file).name
+                MatchResult = namedtuple("MatchResult", "camera_id participant_id label distance lighting angular_error matchings")
+
+                if pattern.match(file_name):
+                    label = file_name.split("_")[0]
+                    participant_id = file_name.split("_")[1]
+                    distance = file_name.split("_")[2]
+                    lighting = file_name.split("_")[3]
+                    
+                    camera_folder = Path(folder).parent.parent.parent.name
+                    camera_id = camera_folder.split("_")[0]
+                    if camera.match(camera_id):
+                        file_path = os.path.join(folder, file)
+                        file_path = Path(file_path)
+                        with file_path.open("r", encoding="utf-8") as f:
+                            for line in f: 
+                                line = line.strip()
+                                if line.startswith("Median Angular Error"):
+                                    angular_error = float(line.split(":")[1].strip())
+                                elif line.startswith("Matched timestamps"):
+                                    matchings = int(line.split(":")[1].strip())
+                                else:
+                                    print(f"something went wrong. no MAE or timestamp in {file}. Skipping!")
+                                    break
+                    else:
+                        print(f"camera ids did not match in {file}. skipping!")
+                        break
+                else: 
+                    print(f"something went wrong. pattern did not match {file}. Skipping!")
+                    break
+
+                row = MatchResult(camera_id, participant_id, label, distance, lighting, angular_error, matchings)
+                append_csv(row, out_csv)
