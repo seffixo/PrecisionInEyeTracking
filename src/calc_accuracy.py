@@ -116,7 +116,7 @@ def process_folder(root_dir, acc_type):
                         single_mae_calc_and_save(gaze_vecs, gt_vecs, gaze_file, root)
                         continue
                     case 'distance':
-                        #calc accuracy per participant
+                        #calc accuracy per distance
                         parts = base.split("_")
                         if len(parts) >= 3:
                             distance = parts[1]

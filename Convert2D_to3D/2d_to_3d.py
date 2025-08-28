@@ -8,8 +8,12 @@ from decimal import Decimal
 from typing import Iterable, Optional, Tuple
 import logging
 
+'''
+Always check for correct camera parameters!
+'''
+
 # Setup basic logging
-log_path = r"D:\WorkingFolder_PythonD\2Dto3D_Conversion\581_stat_conv\normalized_gazedata.log"
+log_path = r"D:\WorkingFolder_PythonD\2Dto3D_Conversion\521_dynam\normalized_gazedata.log"
 
 logging.basicConfig(
     level=logging.INFO,  # Change to DEBUG, WARNING, etc. as needed
@@ -20,30 +24,30 @@ logging.basicConfig(
     ]
 )
 # -------- camera parameters (581) --------
+#K = np.array([
+#       [912.7711395670913, 0.0, 958.5026077976856],
+#        [0.0, 912.172924797333, 515.7067710093856],
+#        [0.0, 0.0, 1.0]
+#], dtype=np.float32)
+#
+#dist = np.array(
+#        [-0.043006050416685725, 0.05772694058191421, 2.5235099153145128e-05,
+#        0.0004967988726047721, -0.03825636453680942],
+#    dtype=np.float32
+#)
+
+# -------- camera parameters (521) --------
 K = np.array([
-       [912.7711395670913, 0.0, 958.5026077976856],
-        [0.0, 912.172924797333, 515.7067710093856],
+        [911.7661807262908, 0.0, 953.1539301425507],
+        [0.0, 911.2665673922147, 515.5778687592352],
         [0.0, 0.0, 1.0]
 ], dtype=np.float32)
 
 dist = np.array(
-        [-0.043006050416685725, 0.05772694058191421, 2.5235099153145128e-05,
-        0.0004967988726047721, -0.03825636453680942],
+        [-0.04277252073338572, 0.061178714113208424, -2.0962433109889865e-06,
+        0.0002723710640655781, -0.040889510305845714],
     dtype=np.float32
 )
-
-# -------- camera parameters (521) --------
-#K = np.array([
-#        [911.7661807262908, 0.0, 953.1539301425507],
-#        [0.0, 911.2665673922147, 515.5778687592352],
-#        [0.0, 0.0, 1.0]
-#], dtype=np.float32)
-
-#dist = np.array(
-#        [-0.04277252073338572, 0.061178714113208424, -2.0962433109889865e-06,
-#        0.0002723710640655781, -0.040889510305845714],
-#    dtype=np.float32
-#)
 
 def load_norm01_from_json(json_path: Path):
     """Load detections from JSON with format:
@@ -240,7 +244,7 @@ def process_one_file_generic(path: Path, out_csv_path: Path, width: int, height:
 
 def main():
     ap = argparse.ArgumentParser(description="Convert 0–1 or pixel image coords to camera-frame unit rays.")
-    ap.add_argument("--json", required=True,
+    ap.add_argument("--root", required=True,
                     help="Root directory to search for gt_data folders (kept name for backward compatibility).")
     ap.add_argument("--input_type", choices=["json", "csv", "auto"], default="auto",
                     help="Type of input files to process. 'auto' looks for both.")
@@ -250,7 +254,7 @@ def main():
                     help="Clip normalized inputs to [0,1] before converting to pixels.")
     args = ap.parse_args()
 
-    root = Path(args.json)
+    root = Path(args.root)
     if not root.exists() or not root.is_dir():
         raise FileNotFoundError(f"Root directory not found or not a directory: {root}")
 
