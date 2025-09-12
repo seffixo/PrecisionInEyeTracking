@@ -35,6 +35,30 @@ def calculate_mae(gaze_vecs, gt_vecs):
     #return MAE (mean angular error) and count
     #return np.mean(angular_errors_deg), len(angular_errors_deg)
 
+def calculate_rms(gaze_vecs, gt_vecs):
+    # Ensure both arrays are normalized (row-wise)
+    gaze_norms = norm(gaze_vecs, axis=1)
+    gt_norms = norm(gt_vecs, axis=1)
+
+    # avoid division by zero
+    eps = np.finfo(float).eps
+    gaze_norms = np.where(gaze_norms == 0, eps, gaze_norms)
+    gt_norms = np.where(gt_norms == 0, eps, gt_norms)
+
+    gaze_vecs_normalized = gaze_vecs / gaze_norms[:, None]
+    gt_vecs_normalized = gt_vecs / gt_norms[:, None]
+
+    # dot products and clip
+    dot_products = np.sum(gaze_vecs_normalized * gt_vecs_normalized, axis=1)
+    dot_products = np.clip(dot_products, -1.0, 1.0)
+
+    # angular error in degrees
+    angular_errors_deg = degrees(1) * np.arccos(dot_products)
+
+    # RMS of angular error (degrees)
+    rms = np.sqrt(np.mean(angular_errors_deg ** 2))
+    return rms, len(angular_errors_deg)
+
 def extract_distance_lighting(base):
     # Example base: P002_120_3L → extract "120" and "3L"
     parts = base.split("_")
@@ -58,8 +82,23 @@ def single_mae_calc_and_save(gaze_vecs, gt_vecs, gaze_file, root):
         f.write(f"Median Angular Error (degrees): {mae:.4f}\n")
         f.write(f"Matched timestamps: {count}\n")
 
+def single_rms_append(gaze_vecs, gt_vecs, gaze_file, root):
+    # append RMS to existing per-participant median files
+    rms, count = calculate_rms(gaze_vecs, gt_vecs)
+    output_filename = gaze_file.replace("_filtered_gaze.csv", "_median_acc.txt")
+    output_folder = os.path.join(root, "median_accuracy")
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    output_path = os.path.join(output_folder, output_filename)
+    # append a new line; create file if missing
+    if os.path.exists(output_path):
+        with open(output_path, "a") as f:
+            f.write(f"RMS Angular Error (degrees): {rms:.4f}\n")
+            f.write(f"Matched timestamps RMS: {count}\n")
+    else:
+        print(f"ERROR: {output_path} does not exist!")
 
-def process_folder(root_dir, acc_type):
+def process_folder(root_dir, acc_type, rms_only):
     #store vectors grouped by label
     grouped_vectors = defaultdict(lambda: {'gaze': [], 'gt': []})
     output_folder = ""
@@ -109,11 +148,15 @@ def process_folder(root_dir, acc_type):
                             lighting = parts[2]
                         group_key = f"{lighting}"
                         grouped_vectors[group_key]['gaze'].append(gaze_vecs)
-                        grouped_vectors[group_key]['gaze'].append(gt_vecs)
+                        grouped_vectors[group_key]['gt'].append(gt_vecs)
                         output_folder = "lighting_median_accuracy"
                     case 'participant':
-                        #calc accuracy per participant
-                        single_mae_calc_and_save(gaze_vecs, gt_vecs, gaze_file, root)
+                        if rms_only:
+                            #append rms only
+                            single_rms_append(gaze_vecs, gt_vecs, gaze_file, root)
+                        else:
+                            #calc accuracy per participant
+                            single_mae_calc_and_save(gaze_vecs, gt_vecs, gaze_file, root)
                         continue
                     case 'distance':
                         #calc accuracy per distance
@@ -144,24 +187,44 @@ def process_folder(root_dir, acc_type):
             all_gaze = np.vstack(data['gaze'])  #stack all gaze vectors
             all_gt = np.vstack(data['gt'])      #stack all ground truth, image vectors
 
-            mae, count = calculate_mae(all_gaze, all_gt)
+            if rms_only:
+                #append rms to existing grouped files
+                rms, count = calculate_rms(all_gaze, all_gt)
 
-            group_folder = os.path.join(output_base, group_key)
-            os.makedirs(group_folder, exist_ok=True)
+                group_folder = os.path.join(output_base, group_key)
+                os.makedirs(group_folder, exist_ok=True)
+                
+                output_path = os.path.join(group_folder, f"{group_key}_group_acc.txt")
+                if os.path.exists(output_path):
+                    with open(output_path, "a") as f:
+                        f.write(f"RMS Angular Error (degrees): {rms:.4f}\n")
+                        f.write(f"Matched timestamps RMS: {count}\n")
+                else: 
+                    print(f"ERROR: {output_path} does not exist!")
 
-            output_path = os.path.join(group_folder, f"{group_key}_group_acc.txt")
-            with open(output_path, "w") as f:
-                f.write(f"Group: {group_key}\n")
-                f.write(f"Median Angular Error (degrees): {mae:.4f}\n")
-                f.write(f"Matched timestamps: {count}\n")
+                print(f"[{group_key}] appended RMSAE: {rms:.2f}° over {count} samples.")
+            
+            else:
+                #median only behavior
+                mae, count = calculate_mae(all_gaze, all_gt)
 
-            print(f"[{group_key}] MedAE: {mae:.2f}° over {count} samples.")
+                group_folder = os.path.join(output_base, group_key)
+                os.makedirs(group_folder, exist_ok=True)
+
+                output_path = os.path.join(group_folder, f"{group_key}_group_acc.txt")
+                with open(output_path, "w") as f:
+                    f.write(f"Group: {group_key}\n")
+                    f.write(f"Median Angular Error (degrees): {mae:.4f}\n")
+                    f.write(f"Matched timestamps: {count}\n")
+
+                print(f"[{group_key}] MedAE: {mae:.2f}° over {count} samples.")
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) != 3:
-        print("Usage: python calculate_accuracy.py <root_directory> <acc_type>")
+    if len(sys.argv) not in (3,4):
+        print("Usage: python calculate_accuracy.py <root_directory> <acc_type> [--rms-only]")
     else:
         root_directory = sys.argv[1]
         acc_type = sys.argv[2]
-        process_folder(root_directory, acc_type)
+        rms_only = (len(sys.argv) == 4 and sys.argv[3] == "--rms-only")
+        process_folder(root_directory, acc_type, rms_only=rms_only)

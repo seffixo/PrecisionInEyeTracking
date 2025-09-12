@@ -27,8 +27,10 @@ import matplotlib.gridspec as gridspec
 
 # ------------ configurable layout / ordering ------------
 LABEL_ORDER = ["LD", "LM", "LU", "MD", "MM", "MU", "RD", "RM", "RU"]
+DYNAM_LABEL = ["MM"]
 DIST_LIGHT_ORDER = ["80-3L", "80-bL", "120-3L", "120-bL", "180-3L", "180-bL"]
 LIGHT_ORDER = ["3L", "bL"]
+LIGHT_MAP = {"3L": "700 Lux", "bL": "300 Lux"}
 DIST_ORDER = ["80", "120", "180"]
 
 LABEL_MATRIX = [
@@ -50,6 +52,7 @@ def add_distance_light_column(df: pd.DataFrame) -> pd.DataFrame:
     df["lighting"] = df["lighting"].astype(str).str.strip()
     df["label"] = df["label"].astype(str).str.strip()
     df["distance_light"] = df["distance"] + "-" + df["lighting"]
+    df["participant_id"] = df["participant_id"].astype(str).strip()
     return df
 
 def _normalize_core_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -171,7 +174,7 @@ def _plot_rectangular_grid(
                         transform=ax.transAxes, alpha=0.4)
                 ax.set_xticks([]); ax.set_yticks([]); ax.set_frame_on(False)
                 if c == 0: ax.set_ylabel(lab, rotation=0, ha="right", va="center", labelpad=12, fontsize=10)
-                if r == 0: ax.set_title(str(colcat), fontsize=10, pad=6)
+                if r == 0: ax.set_title(LIGHT_MAP.get(colcat, str(colcat)), fontsize=10, pad=6)
                 continue
 
             if orientation == "horizontal":
@@ -181,7 +184,7 @@ def _plot_rectangular_grid(
 
             ax.grid(alpha=0.2, axis="x" if orientation == "horizontal" else "y")
             if c == 0: ax.set_ylabel(lab, rotation=0, ha="right", va="center", labelpad=12, fontsize=10)
-            if r == 0: ax.set_title(str(colcat), fontsize=10, pad=6)
+            if r == 0: ax.set_title(LIGHT_MAP.get(colcat, str(colcat)), fontsize=10, pad=6)
             if show_n:
                 ax.text(0.02, 0.95, f"n={n}", transform=ax.transAxes, ha="left", va="top", fontsize=8, alpha=0.85)
             if show_median and n:
@@ -192,6 +195,57 @@ def _plot_rectangular_grid(
     buf = io.BytesIO(); fig.savefig(buf, format="png", dpi=DPI, bbox_inches="tight"); buf.seek(0); plt.close(fig)
     if save_path_png:
         with open(save_path_png, "wb") as f: f.write(buf.getbuffer())
+    return buf
+
+def plot_matrix3x3_for_participant(
+    df: pd.DataFrame,
+    participant_id,
+    camera_id: str | None = None,
+    save_path_png: str | None = None,
+    show_n: bool = True,
+    show_median: bool = False,
+    overlay_jitter: bool = False,
+    jitter_alpha: float = 0.35,
+    orientation: str = "horizontal"
+) -> io.BytesIO:
+    """
+    Create a 3x3 label matrix (LU..RD) with one block per lighting for a single participant.
+    If camera_id is given, filter to that camera as well.
+    """
+    data = df.copy()
+    data = _normalize_core_columns(data)
+    data = add_distance_light_column(data)
+
+    # Filter by participant (and camera if provided)
+    data = data[data["participant_id"].astype(str) == str(participant_id)]
+    if camera_id is not None:
+        data = data[data["camera_id"].astype(str) == str(camera_id)]
+    if data.empty:
+        raise ValueError(f"No rows found for participant_id={participant_id}" + (f" and camera_id={camera_id}" if camera_id is not None else ""))
+
+    all_vals = data["angular_error"].dropna().values
+    if len(all_vals) == 0:
+        raise ValueError("No angular_error values present for the selected participant/camera.")
+
+    lo, hi = _compute_global_limits(all_vals)
+    locator = mticker.MaxNLocator(nbins=5)
+
+    # The matrix3x3 routine expects lighting-based blocks; we’ll give it a participant-focused title.
+    title_prefix = f"Participant {participant_id}"
+    if camera_id is not None:
+        title_prefix += f" – Camera {camera_id}"
+
+    # Temporarily override the main title inside the plotting routine using a wrapper:
+    # We'll produce the figure via _plot_matrix3x3_by_lighting and then overlay a proper suptitle.
+    buf = _plot_matrix3x3_by_lighting(
+        data=data,
+        camera_id=title_prefix,  # we pass the composed title into the slot used in suptitle
+        lo=lo, hi=hi, locator=locator,
+        save_path_png=save_path_png,
+        show_n=show_n, show_median=show_median,
+        overlay_jitter=overlay_jitter, jitter_alpha=jitter_alpha,
+        orientation=orientation
+    )
     return buf
 
 def _plot_matrix3x3_by_lighting(
@@ -278,7 +332,8 @@ def _plot_matrix3x3_by_lighting(
         bb = outer[b].get_position(fig)  # bounding box of that sub-grid in figure coords
         cx = (bb.x0 + bb.x1) / 2.0       # center x of the block
         ty = bb.y1 + 0.012               # a bit above the block
-        fig.text(cx, ty, f"{lt}  –  {dist_text}", ha="center", va="bottom", fontsize=12)
+        fig.text(cx, ty, f"{LIGHT_MAP.get(lt, lt)}  –  {dist_text}", 
+         ha="center", va="bottom", fontsize=12)
 
     buf = io.BytesIO(); fig.savefig(buf, format="png", dpi=DPI, bbox_inches="tight"); buf.seek(0); plt.close(fig)
     if save_path_png:
@@ -304,6 +359,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_csv", help="Path to long-format CSV.")
     parser.add_argument("--camera", required=True, help="Camera ID to filter (e.g., 521).")
+    parser.add_argument("--participants", nargs="+", help="List of participant IDs to include (e.g., --participants P001 P007 P042).")
     parser.add_argument("--out", default="boxplots.xlsx", help="Output Excel file path.")
     parser.add_argument("--save-png", default=None, help="(Optional) Also save the figure as PNG.")
     parser.add_argument("--distances", nargs="+", help='Distances to include (e.g., 80 120). If omitted, all distances are used.')
@@ -324,6 +380,12 @@ def main():
         df = df[df["distance"].isin(allowed)]
         if df.empty:
             raise ValueError(f"No rows left after filtering for distances={sorted(allowed)}")
+        
+    if args.participants:
+        allowed_participants = {str(p).strip() for p in args.participants}
+        df = df[df["participant_id"].astype(str).isin(allowed_participants)]
+        if df.empty:
+            raise ValueError(f"No rows left after filtering for participants={sorted(allowed_participants)}")
 
     show_n = True
     show_median = False
@@ -342,6 +404,7 @@ def main():
     print(f"Done. Wrote: {args.out}")
     if args.save_png:
         print(f"Also saved PNG: {args.save_png}")
+
 
 if __name__ == "__main__":
     main()
