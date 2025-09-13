@@ -108,18 +108,19 @@ def process_all_participants(root_dir):
     rename_participant_folders(root_dir)
     #unpack_and_rename_gazedata_gz_files(root_dir)
 
-   #meta_found = False
-    #for root, dirs, _ in os.walk(root_dir):
-    #    for dir_name in dirs:
-    #        if dir_name == "meta":
-    #            meta_found = True
-    #            meta_path = os.path.join(root, dir_name)
-    #            participant_path = os.path.dirname(meta_path)
-    #            output_path = os.path.join(participant_path, "Event_time_ranges.txt")
-    #            extract_and_generate_mouseclick_ranges(meta_path, output_path)
+    meta_found = False
+    for root, dirs, _ in os.walk(root_dir):
+        for dir_name in dirs:
+            dir_path = os.path.join(root, dir_name)
+            if dir_name == "meta":
+                meta_found = True
+                meta_path = os.path.join(root, dir_name)
+                participant_path = os.path.dirname(meta_path)
+                output_path = os.path.join(participant_path, "Event_time_ranges.txt")
+                extract_and_generate_mouseclick_ranges(meta_path, output_path)
 
-    #if not meta_found:
-    #    print("No 'meta' folders found in the specified root directory.")
+    if not meta_found:
+        print(f"No 'meta' folders found in {Path(dir_path).parent.name}.")
 
 
 def main():

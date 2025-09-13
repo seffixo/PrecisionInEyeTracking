@@ -166,32 +166,19 @@ def crop_with_ffmpeg(input_path: str, output_path: str, ranges: List[Tuple[float
     Re-encodes (H.264 + AAC) for clean, keyframe-independent cuts.
     """
     expr = build_select_expr(ranges)
-    audio_present = has_audio(input_path)
-
-    if audio_present:
-        filter_complex = (
-            f"[0:v]select='{expr}',setpts=N/FRAME_RATE/TB[v];"
-            f"[0:a]aselect='{expr}',asetpts=N/SR/TB[a]"
-        )
-        map_args = ["-map", "[v]", "-map", "[a]"]
-    else:
-        filter_complex = f"[0:v]select='{expr}',setpts=N/FRAME_RATE/TB[v]"
-        map_args = ["-map", "[v]"]
+    filter_complex = f"[0:v]select='{expr}',setpts=N/FRAME_RATE/TB[v]"
 
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
         "-filter_complex", filter_complex,
-        *map_args,
-        "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+        "map", "[v]", "-an",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "18", output_path,
     ]
-    if audio_present:
-        cmd += ["-c:a", "aac", "-b:a", "192k"]
-    cmd += [output_path]
 
     run(cmd)
 
-def find_targets(base_dir: str, ranges_filename: str = "event_time_ranges.txt") -> List[Tuple[str, List[str]]]:
+def find_targets(base_dir: str, ranges_filename: str = "Event_time_ranges.txt") -> List[Tuple[str, List[str]]]:
     """
     Return a list of tuples: (folder_path, [mp4_paths...]) for folders that
     contain the ranges file and at least one .mp4 file.
@@ -208,7 +195,7 @@ def find_targets(base_dir: str, ranges_filename: str = "event_time_ranges.txt") 
 def main():
     ap = argparse.ArgumentParser(description="Crop MP4s by time ranges per folder.")
     ap.add_argument("--base", default=".", help="Base directory to scan (default: current dir).")
-    ap.add_argument("--ranges-name", default="event_time_ranges.txt",
+    ap.add_argument("--ranges-name", default="Event_time_ranges.txt",
                     help="Name of the time range file (default: event_time_ranges.txt).")
     ap.add_argument("--skip-existing", action="store_true",
                     help="Skip creating output if <name>_cropped.mp4 already exists.")
@@ -226,6 +213,8 @@ def main():
         ranges_path = os.path.join(folder, args.ranges_name)
         try:
             ranges = read_ranges(ranges_path)
+            start, end = ranges[-1]             # unpack last (start, end)
+            ranges[-1] = (start, end - 0.8)     # replace tuple with modified one
         except Exception as e:
             print(f"[ERROR] {ranges_path}: {e}")
             continue
