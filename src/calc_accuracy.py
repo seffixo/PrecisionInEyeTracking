@@ -30,7 +30,7 @@ def calculate_mae(gaze_vecs, gt_vecs):
     angular_errors_deg = degrees(1) * angular_errors_rad
 
     # Return MedAE (median angular error) and count
-    return np.median(angular_errors_deg), len(angular_errors_deg)
+    return np.median(angular_errors_deg), len(angular_errors_deg), angular_errors_deg
 
     #return MAE (mean angular error) and count
     #return np.mean(angular_errors_deg), len(angular_errors_deg)
@@ -70,9 +70,10 @@ def extract_distance_lighting(base):
         return "unknown"
 
 def single_mae_calc_and_save(gaze_vecs, gt_vecs, gaze_file, root):
-    mae, count = calculate_mae(gaze_vecs, gt_vecs)
+    mae, count, angular_errors = calculate_mae(gaze_vecs, gt_vecs)
 
     # Output to file
+    copy_gaze = gaze_file
     output_filename = gaze_file.replace("_filtered_gaze.csv", "_median_acc.txt")
     output_folder = os.path.join(root, "median_accuracy")
     if not os.path.exists(output_folder):
@@ -81,6 +82,13 @@ def single_mae_calc_and_save(gaze_vecs, gt_vecs, gaze_file, root):
     with open(output_path, "w") as f:
         f.write(f"Median Angular Error (degrees): {mae:.4f}\n")
         f.write(f"Matched timestamps: {count}\n")
+
+    error_filename = copy_gaze.replace("_filtered_gaze.csv", "_angular_errors.txt")
+    error_folder = os.path.join(root, "raw_accuracy")
+    if not os.path.exists(error_folder):
+        os.makedirs(error_folder)
+    error_output = os.path.join(error_folder, error_filename)
+    np.savetxt(error_output, angular_errors, fmt="%.4f")
 
 def single_rms_append(gaze_vecs, gt_vecs, gaze_file, root):
     # append RMS to existing per-participant median files
@@ -97,6 +105,9 @@ def single_rms_append(gaze_vecs, gt_vecs, gaze_file, root):
             f.write(f"Matched timestamps RMS: {count}\n")
     else:
         print(f"ERROR: {output_path} does not exist!")
+
+import numpy as np
+
 
 def process_folder(root_dir, acc_type, rms_only):
     #store vectors grouped by label

@@ -26,15 +26,18 @@ def find_event_files(root: Path):
                         continue
 
 def create_tsv_file(og_file, vali_path, fps):
-    frame_path = os.path.join(vali_path, "Frame_ranges.tsv")
-    df = pd.read_csv(og_file, header=None, names=["label", "start", "end"])
+    frame_path = os.path.join(vali_path, "markerInterval.tsv")
+    df = pd.read_csv(og_file, header=None, names=["start", "end"])
     
-    df["start_frame"] = (df["start"] * fps).round().astype(int)
-    df["end_frame"] = (df["end"] * fps).round().astype(int)
+    start_val = df["start"].iloc[0]
+    end_val = df["end"].iloc[-1]
 
-    frame_ranges = df[["start_frame", "end_frame"]]
+    start_frame = int(round(start_val * fps))
+    end_frame = int(round(end_val * fps))
 
-    frame_ranges.to_csv(frame_path, sep="\t", index=False)
+    out_df = pd.DataFrame([[start_frame, end_frame]], columns=["start_frame", "end_frame"])
+
+    out_df.to_csv(frame_path, sep="\t", index=False)
 
 
 def main():
