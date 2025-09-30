@@ -172,7 +172,7 @@ def crop_with_ffmpeg(input_path: str, output_path: str, ranges: List[Tuple[float
         "ffmpeg", "-y",
         "-i", input_path,
         "-filter_complex", filter_complex,
-        "map", "[v]", "-an",
+        "-map", "[v]", "-an",
         "-c:v", "libx264", "-preset", "medium", "-crf", "18", output_path,
     ]
 
@@ -191,6 +191,19 @@ def find_targets(base_dir: str, ranges_filename: str = "Event_time_ranges.txt") 
             if mp4s:
                 targets.append((root, mp4s))
     return targets
+
+def replace_original_with_cropped(original_path: str, cropped_path: str) -> None:
+    """
+    Replace the original file with the cropped one.
+    - Verifies the cropped file exists and is non-empty.
+    - Deletes the original (if present).
+    - Renames the cropped file to the original name.
+    """
+    if not (os.path.exists(cropped_path) and os.path.getsize(cropped_path) > 0):
+        raise RuntimeError(f"Cropped output missing or empty: {cropped_path}")
+    if os.path.exists(original_path):
+        os.remove(original_path)  # free the filename
+    os.replace(cropped_path, original_path)  # atomic on same volume
 
 def main():
     ap = argparse.ArgumentParser(description="Crop MP4s by time ranges per folder.")
@@ -214,7 +227,7 @@ def main():
         try:
             ranges = read_ranges(ranges_path)
             start, end = ranges[-1]             # unpack last (start, end)
-            ranges[-1] = (start, end - 0.8)     # replace tuple with modified one
+            ranges[-1] = (start, end - 0.5)     # replace tuple with modified one
         except Exception as e:
             print(f"[ERROR] {ranges_path}: {e}")
             continue
@@ -223,8 +236,8 @@ def main():
             print(f"[WARN] No valid ranges in {ranges_path}; skipping folder.")
             continue
 
-        print(f"\nFolder: {folder}")
-        print(f"  Ranges ({len(ranges)} merged): " + ", ".join([f"{s:.3f}-{e:.3f}s" for s, e in ranges]))
+        #print(f"\nFolder: {folder}")
+        #print(f"  Ranges ({len(ranges)} merged): " + ", ".join([f"{s:.3f}-{e:.3f}s" for s, e in ranges]))
         for mp4 in sorted(mp4s):
             base, ext = os.path.splitext(mp4)
             out = base + "_cropped" + ext
@@ -234,6 +247,9 @@ def main():
             print(f"  Cropping: {os.path.basename(mp4)} -> {os.path.basename(out)}")
             try:
                 crop_with_ffmpeg(mp4, out, ranges)
+
+                #replace_original_with_cropped(mp4, out)
+                #print(f"    Replaced original with cropped one.")
             except Exception as e:
                 print(f"  [ERROR] Failed: {e}")
 

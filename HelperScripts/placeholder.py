@@ -14,7 +14,6 @@ TARGET_TO_LABEL = {
     "4": "LM", "5": "MM", "6": "RM",
     "7": "LD", "8": "MD", "9": "RD",
 }
-LABELS = {"LU", "MU", "RU", "LM", "MM", "RM", "LD", "MD", "RD"}
 
 participant = re.compile(
     r'(P0\d{2})_'
@@ -72,53 +71,33 @@ def extract_metadata_from_path(fpath: Path):
     return camera_id, participant_id, distance, lighting
 
 
-def parse_median_accuracy_file(fpath: Path):
-    """
-    Reads only:
-      - Median Angular Error (degrees)
-      - Matched timestamps
-    """
-    label = Path(fpath).name.split('_')[0]
-    median_acc = None
-    matchings = None
-    if label not in LABELS:
-        pass
-
-    try:
-        with fpath.open("r", encoding="utf-8") as f:
-            for raw in f:
-                line = raw.strip()
-
-                # Median Angular Error (degrees): 0.9910
-                m_acc = re.match(
-                    r"(?i)^median\s+angular\s+error\s*\(degrees\)\s*:\s*([+-]?\d+(?:\.\d+)?)\s*$",
-                    line
-                )
-                if m_acc:
-                    median_acc = float(m_acc.group(1))
-                    continue
-
-                # Matched timestamps: 897
-                m_mtch = re.match(
-                    r"(?i)^matched\s+timestamps\s*:\s*(\d+)\s*$",
-                    line
-                )
-                if m_mtch:
-                    matchings = int(m_mtch.group(1))
-                    continue
-
-                # RMS Angular Error (degrees): 0.6452
-                m_rms = re.match(
-                    r"(?i)^rms\s+angular\s+error\s*\(degrees\)\s*:\s*([+-]?\d+(?:\.\d+)?)\s*$",
-                    line
-                )
-                if m_rms:
-                    rms_acc = float(m_rms.group(1))
-                    continue
-    except Exception:
-        return None, None
-
-    return label, median_acc, matchings, rms_acc
+def parse_dataquality_tsv(tsv_path: Path):
+    rows = []
+    with tsv_path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        if not ("target" in reader.fieldnames and "acc" in reader.fieldnames and "rms" in reader.fieldnames):
+            raise ValueError(f"{tsv_path}: missing 'target' or 'acc' columns")
+        for r in reader:
+            target_raw = str(r.get("target", "")).strip()
+            acc_raw = str(r.get("acc", "")).strip()
+            rms_raw = str(r.get("rms", "")).strip()
+            if target_raw == "" or acc_raw == "" or rms_raw == "":
+                continue
+            label = TARGET_TO_LABEL.get(target_raw)
+            if not label:
+                try:
+                    label = TARGET_TO_LABEL.get(str(int(float(target_raw))))
+                except Exception:
+                    label = None
+            if not label:
+                continue
+            try:
+                angular_error = float(acc_raw)
+                rms_value = float(rms_raw)
+            except ValueError:
+                continue
+            rows.append((label, angular_error, rms_value))
+    return rows
 
 
 def find_dataquality_files(root: Path, folder_filter: str | None):
@@ -133,19 +112,6 @@ def find_dataquality_files(root: Path, folder_filter: str | None):
                 if candidate.exists():
                     yield candidate
                     continue
-
-def find_median_files(root: Path, folder_filter: str | None):
-    for folder in os.listdir(root):
-        if participant.match(folder):
-            folder_path = os.path.join(root, folder)
-            for subfolder in os.listdir(folder_path):
-                subfolder_path = os.path.join(folder_path, subfolder)
-                median_folder = os.path.join(subfolder_path, "median_accuracy")
-                for file in os.listdir(median_folder):
-                    if file.endswith(".txt"):
-                        candidate = Path(median_folder) / file 
-                        yield candidate 
-                        continue
 
 
 # --- main ---------------------------------------------------------------------
@@ -175,46 +141,24 @@ def main():
 
     with out_path.open("w", encoding="utf-8", newline="") as outf:
         writer = csv.writer(outf)
-        writer.writerow(["camera_id", "participant_id", "label", "distance", "lighting", "angular_error", "matchings", "rms"])
+        writer.writerow(["camera_id", "participant_id", "label", "distance", "lighting", "angular_error", "rms"])
 
         n_files = 0
         n_rows = 0
 
-        for tsv in find_median_files(root, args.folder_filter):
+        for tsv in find_dataquality_files(root, args.folder_filter):
             camera_id, participant_id, distance, lighting = extract_metadata_from_path(tsv)
             if camera_id not in VALID_CAMERAS or not participant_id or not distance or not lighting:
                 logging.warning(f"Skipping {tsv} due to missing metadata: "
                                 f"camera_id={camera_id}, participant={participant_id}, distance={distance}, lighting={lighting}")
                 continue
             try:
-                label, median_acc, matchings, rms_acc = parse_median_accuracy_file(tsv)
-
-                if label not in LABELS:
-                    logging.warning(f"Skipping {tsv}: label '{label}' not in expected set {sorted(LABELS)}")
-                    continue
-
-                if median_acc is None or matchings is None:
-                    logging.warning(
-                        f"Skipping {tsv}: missing required values "
-                        f"(median={median_acc}, matchings={matchings})"
-                    )
-                    continue
-
-                writer.writerow([
-                    camera_id,
-                    participant_id,
-                    label,
-                    distance,
-                    lighting,
-                    f"{median_acc:.6f}",
-                    matchings,
-                    "" if rms_acc is None else f"{rms_acc:.6f}",
-                ])
-                n_rows += 1
+                for label, angular_error, rms_value in parse_dataquality_tsv(tsv):
+                    writer.writerow([camera_id, participant_id, label, distance, lighting, f"{angular_error:.6f}", f"{rms_value:.6f}"])
+                    n_rows += 1
                 n_files += 1
                 logging.info(f"Processed {tsv} with {n_rows} total rows so far.")
-            except Exception as e:
-                logging.exception(f"Failed processing {tsv}: {e}")
+            except Exception:
                 continue
 
     print(f"Wrote {n_rows} rows from {n_files} files to: {out_path}")

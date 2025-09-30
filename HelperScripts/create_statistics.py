@@ -351,7 +351,7 @@ def plot_label_boxgrid(
     if len(all_vals) == 0:
         raise ValueError("No angular_error values present.")
     lo = 0
-    hi = 20
+    hi = 30
     if lo is None or hi is None:
         lo, hi = _compute_global_limits(all_vals)
     locator = mticker.MaxNLocator(nbins=5)
